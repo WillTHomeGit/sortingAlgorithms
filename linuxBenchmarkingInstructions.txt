@@ -1,0 +1,17 @@
+Copy the File: Move the benchmarking-linux file to your Bazzite OS machine (e.g., into your Home or Downloads folder).
+
+Make it Executable: By default, for security reasons, Linux doesn't treat new files as programs you can run. You need to give it "executable" permission first.
+
+Open a terminal on Bazzite OS.
+Navigate to the folder where you saved the file. For example: cd ~/Downloads
+Run the chmod (change mode) command:
+Bash
+
+chmod +x benchmarking-linux
+This command means "change mode" and "+x" means "add executable permission." You only need to do this once.
+Run the Executable: Now you can run your benchmark directly from the terminal.
+
+Bash
+
+./benchmarking-linux
+(The ./ at the beginning is important—it tells the terminal to look for the program in the current directory).
