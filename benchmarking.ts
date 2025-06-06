@@ -2,6 +2,7 @@
 
 import { bubbleSort, bubbleSortSmart, insertionSort, selectionSort, mergeSort, quickSort, countingSort, radixSort, bitwiseRadixSort, heapSort, shellSort } from "./sortingAlgorithms"; // Assuming you have these
 import Benchmark from "benchmark";
+import { Performance } from "perf_hooks";
 import fs from "fs"; // Node.js File System module
 import path from "path"; // Node.js Path module
 
@@ -39,6 +40,19 @@ const testNumbers = [
   30_000,
 ];
 
+const algorithmFunctions = [
+  bubbleSort, bubbleSortSmart, insertionSort, selectionSort, mergeSort, 
+  quickSort, countingSort, radixSort, bitwiseRadixSort, heapSort, shellSort
+];
+
+// Define which algorithms should be skipped for large tests.
+const slowAlgorithmFunctions = [
+  bubbleSort,
+  bubbleSortSmart,
+  insertionSort,
+  selectionSort
+];
+
 //
 // 2) Pre-generate one random array for each size
 //
@@ -47,6 +61,66 @@ const testArrays: number[][] = testNumbers.map((n) =>
   Array.from({ length: n }, () => Math.floor(Math.random() * n * 2))
 );
 console.log("Test arrays generated.");
+
+
+const incrementalTestArrayResults : number[][] = [];
+
+for (let i = 0; i < algorithmFunctions.length; i++) {
+  incrementalTestArrayResults.push([]);
+}
+
+function runIncrementalArraySizedTests() {
+  // --- Configuration ---
+  const MAX_TEST_SIZE = 30_000;
+  const SLOW_TEST_THRESHOLD = 2_500; // Stop testing slow sorts after this size
+  const SAMPLES_PER_SIZE = 50;       // Run each test 5 times and average the result
+  const GROWTH_FACTOR = 1.1;        // Increase array size by 20% each step
+  const STARTING_SIZE = 10;
+
+  // --- 1. Generate our list of test sizes that grow exponentially ---
+  const incrementalTestSizes = [];
+  let currentSize = STARTING_SIZE;
+  while (currentSize <= MAX_TEST_SIZE) {
+    incrementalTestSizes.push(Math.floor(currentSize));
+    currentSize *= GROWTH_FACTOR;
+  }
+  console.log("Generated test sizes for incremental test:", incrementalTestSizes);
+
+  // --- 2. Loop through our new, smarter list of sizes ---
+  for (const size of incrementalTestSizes) {
+    
+    // --- 3. Loop through each algorithm ---
+    for (let j = 0; j < algorithmFunctions.length; j++) {
+      const currentAlgorithm = algorithmFunctions[j];
+
+      // Skip slow algorithms on large arrays
+      if (size > SLOW_TEST_THRESHOLD && slowAlgorithmFunctions.includes(currentAlgorithm)) {
+        continue; 
+      }
+
+      const sampleResults: number[] = [];
+      // --- 4. Run multiple samples for this size and average them ---
+      for (let s = 0; s < SAMPLES_PER_SIZE; s++) {
+        // Generate a new random array for EACH sample to ensure fairness
+        const incrementalTestArray: number[] = Array.from({ length: size }, () => Math.floor(Math.random() * size * 2));
+        
+        const start = performance.now();
+        currentAlgorithm(incrementalTestArray);
+        const result = performance.now() - start;
+        sampleResults.push(result);
+      }
+
+      // Calculate the average of the samples
+      const averageTime = sampleResults.reduce((a, b) => a + b, 0) / SAMPLES_PER_SIZE;
+      
+      // Store the single, stable, averaged result
+      incrementalTestArrayResults[j][size] = averageTime;
+    }
+    
+    // Progress logger
+    console.log(`Finished tests for size: ${size}`);
+  }
+}
 
 //
 // 3) A helper function that, given an index, runs a Benchmark.Suite for that size
@@ -126,7 +200,7 @@ function runSuiteForSize(index: number) {
     },
       // This line adds maxTime: 5 ONLY if size > 5000
       // ...(size < 1000 && { maxTime: 2 }) 
-      // maxTime:2                                 //1283971283714
+      maxTime:2                                 //1283971283714
     })
     .add({
     name: `Radix Sort (${size})`,
@@ -144,7 +218,7 @@ function runSuiteForSize(index: number) {
     },
       // This line adds maxTime: 5 ONLY if size > 5000
       // ...(size < 1000 && { maxTime: 2 }) 
-      // maxTime:2                               //1283971283714
+      maxTime:2                               //1283971283714
     })
     .add({
     name: `Heap Sort (${size})`,
@@ -211,297 +285,206 @@ function runSuiteForSize(index: number) {
     .run({ async: true });
 }
 
+
+
+
 //
 // 4) Function to generate HTML plots using Chart.js
 //
 function generatePlots(results: AllResults) {
-  const algorithmNames = Object.keys(results);
-  if (algorithmNames.length === 0) {
-    console.log("No benchmark results to plot.");
-    return;
-  }
+  const algorithmFunctionNames = [
+    'Bubble Sort', 'Bubble Sort Smart', 'Insertion Sort', 'Selection Sort', 'Merge Sort', 
+    'Quick Sort', 'Counting Sort', 'Radix Sort', 'Bitwise Radix Sort', 'Heap Sort', 'Shell Sort'
+  ];
 
-  // === Chart 1: Performance (Ops/sec) on Log-Log Scale ===
-  const lineStyles = [
-    { color: '#FF6384', dash: undefined },
-    { color: '#36A2EB', dash: [5, 5] },
-    { color: '#FFCE56', dash: undefined },
-    { color: '#4BC0C0', dash: [3, 3] },
-    { color: '#9966FF', dash: undefined },
-    { color: '#FF9F40', dash: [7, 3] },
-    { color: '#FF2400', dash: undefined },
-    { color: '#7986CB', dash: [4, 4] },
-    { color: '#4CAF50', dash: [10, 4, 3, 4] },
-    { color: '#E57373', dash: undefined },
-    { color: '#008080', dash: [4, 4] },
-  ];
+  const benchmarkJsAlgorithmNames = Object.keys(results);
+  const hasIncrementalResults = incrementalTestArrayResults.some(res => Object.keys(res).length > 0);
 
-  const performanceDatasets = algorithmNames.map((algoName, i) => {
-    const dataPoints = results[algoName]
-      .sort((a, b) => a.size - b.size)
-      .map(r => ({ x: r.size, y: r.hz }));
+  if (benchmarkJsAlgorithmNames.length === 0 && !hasIncrementalResults) {
+    console.log("No results found to plot.");
+    return;
+  }
 
-    const style = lineStyles[i % lineStyles.length];
+  const lineStyles = [
+    { color: '#FF6384', dash: undefined }, { color: '#36A2EB', dash: [5, 5] },
+    { color: '#FFCE56', dash: undefined }, { color: '#4BC0C0', dash: [3, 3] },
+    { color: '#9966FF', dash: undefined }, { color: '#FF9F40', dash: [7, 3] },
+    { color: '#FF2400', dash: undefined }, { color: '#7986CB', dash: [4, 4] },
+    { color: '#4CAF50', dash: [10, 4, 3, 4] }, { color: '#E57373', dash: undefined },
+    { color: '#008080', dash: [4, 4] },
+  ];
 
-    return {
-      label: algoName,
-      data: dataPoints,
-      borderColor: style.color,
-      backgroundColor: style.color + '33',
-      borderWidth: 2.5,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      tension: 0.1,
-      fill: false,
-      borderDash: style.dash,
-    };
-  });
+  // --- Chart 1 & 2: Benchmark.js Data ---
+  let performanceChartConfigJs = 'null';
+  let speedupChartConfigJs = 'null';
 
-  const performanceChartConfig = {
-    type: 'line',
-    data: {
-      datasets: performanceDatasets,
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top' },
-        title: { display: true, text: 'Algorithm Performance (Log-Log Scale)' },
-        tooltip: {
-          callbacks: {
-            title: function(tooltipItems: any[]) {
-              if (tooltipItems.length > 0) {
-                return `Array Size: ${tooltipItems[0].raw.x}`;
-              }
-              return '';
-            },
-            label: function(tooltipItem: any) {
-              let label = tooltipItem.dataset.label || '';
-              if (label) label += ': ';
-              if (tooltipItem.raw.y !== null && tooltipItem.raw.y !== undefined) {
-                label += `${tooltipItem.raw.y.toPrecision(4)} ops/sec`;
-              }
-              return label;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          type: 'logarithmic',
-          display: true,
-          title: { display: true, text: 'Array Size (Log Scale)' },
-        },
-        y: {
-          type: 'logarithmic',
-          display: true,
-          title: { display: true, text: 'Operations per Second (ops/sec) (Log Scale)' },
-          ticks: {
-            callback: function(value: number | string) {
-              if (typeof value === 'string') return value;
-              if (value === 0) return '0';
-              const absValue = Math.abs(value);
-              if (absValue >= 1e6) return (value / 1e6).toPrecision(3) + 'M';
-              if (absValue >= 1e3) return (value / 1e3).toPrecision(3) + 'K';
-              return value.toPrecision(3);
-            }
-          }
-        },
-      },
-    },
-  };
-
-  // === Chart 2: Speedup Ratio (Optional - if more than one algorithm) ===
-  let speedupChartConfigJs = 'null';
-  if (algorithmNames.length > 1) {
-    // --- IMPROVEMENT: Pick the slowest algorithm as the baseline for more intuitive ratios ---
-    const sortedAlgorithmNames = [...algorithmNames].sort((a, b) => {
-        const aLastResult = results[a][results[a].length - 1]?.hz ?? 0;
-        const bLastResult = results[b][results[b].length - 1]?.hz ?? 0;
-        return aLastResult - bLastResult; // Sorts ascending by speed (slowest first)
+  if (benchmarkJsAlgorithmNames.length > 0) {
+    // Chart 1: Performance
+    const performanceDatasets = benchmarkJsAlgorithmNames.map((algoName, i) => {
+      const dataPoints = results[algoName].sort((a, b) => a.size - b.size).map(r => ({ x: r.size, y: r.hz }));
+      const style = lineStyles[i % lineStyles.length];
+      return { label: algoName, data: dataPoints, borderColor: style.color, backgroundColor: style.color + '33', borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6, tension: 0.1, fill: false, borderDash: style.dash };
     });
-    const baselineAlgoName = sortedAlgorithmNames[0]; // Slowest algorithm is the new baseline
 
-    const baselineData = results[baselineAlgoName]
-        .sort((a,b) => a.size - b.size)
-        .map(r => ({ x: r.size, y: r.hz }));
+    const performanceChartConfig = {
+      type: 'line',
+      data: { datasets: performanceDatasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Algorithm Performance (Ops/sec) - Higher is Better' },
+          tooltip: {
+            callbacks: {
+              title: (items: any[]) => items.length > 0 ? `Array Size: ${items[0].raw.x}` : '',
+              label: (item: any) => `${item.dataset.label || ''}: ${item.raw.y.toPrecision(4)} ops/sec`
+            }
+          }
+        },
+        scales: {
+          x: { type: 'logarithmic', display: true, title: { display: true, text: 'Array Size (Log Scale)' } },
+          y: {
+            type: 'logarithmic',
+            display: true,
+            title: { display: true, text: 'Operations per Second (Log Scale)' },
+            ticks: {
+              callback: (val: any) => {
+                if (typeof val !== 'number') return val;
+                const abs = Math.abs(val);
+                if (abs >= 1e6) return (val / 1e6).toPrecision(3) + 'M';
+                if (abs >= 1e3) return (val / 1e3).toPrecision(3) + 'K';
+                return val.toPrecision(3);
+              }
+            }
+          }
+        }
+      }
+    };
+    performanceChartConfigJs = JSON.stringify(performanceChartConfig);
 
-    const speedupDatasets = sortedAlgorithmNames
-      .filter(name => name !== baselineAlgoName) // Don't compare the baseline to itself
-      .map((algoName, i) => {
-      const currentAlgoData = results[algoName]
-          .sort((a,b) => a.size - b.size)
-          .map(r => ({x: r.size, y: r.hz}));
+    // Chart 2: Speedup
+    if (benchmarkJsAlgorithmNames.length > 1) {
+      const sortedNames = [...benchmarkJsAlgorithmNames].sort((a, b) => (results[a][results[a].length - 1]?.hz ?? 0) - (results[b][results[b].length - 1]?.hz ?? 0));
+      const baselineName = sortedNames[0];
+      const baselineData = results[baselineName].sort((a, b) => a.size - b.size).map(r => ({ x: r.size, y: r.hz }));
+      const speedupDatasets = sortedNames.filter(name => name !== baselineName).map((algoName, i) => {
+        const currentData = results[algoName].sort((a, b) => a.size - b.size).map(r => ({ x: r.size, y: r.hz }));
+        const ratioData = baselineData.map(bp => {
+          const cp = currentData.find(p => p.x === bp.x);
+          return (cp && cp.y && bp.y) ? { x: bp.x, y: cp.y / bp.y } : null;
+        }).filter(p => p !== null);
+        const style = lineStyles[i % lineStyles.length];
+        return { label: `${algoName} / ${baselineName}`, data: ratioData, borderColor: style.color, backgroundColor: style.color + '33', borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0.1, fill: false, borderDash: style.dash };
+      });
+        
+      const speedupChartOptions = {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: `Speedup Ratio (Relative to ${baselineName})` },
+          tooltip: {
+            callbacks: {
+              title: (items: any[]) => items.length > 0 ? `Array Size: ${items[0].raw.x}` : '',
+              label: (item: any) => `${item.dataset.label || ''}: ${item.raw.y.toPrecision(4)}x`
+            }
+          },
+          annotation: {
+            annotations: {
+              baselineLine: { type: 'line', yMin: 1.0, yMax: 1.0, borderColor: 'rgba(128,128,128,0.7)', borderWidth: 2, borderDash: [6, 6], label: { content: '1.0x Baseline', enabled: true, position: 'end', backgroundColor: 'rgba(255,255,255,0.6)', color: 'rgba(100,100,100,1)', font: { style: 'italic' }, yAdjust: -10 } }
+            }
+          }
+        },
+        scales: {
+          x: { type: 'logarithmic', display: true, title: { display: true, text: 'Array Size (Log Scale)' } },
+          y: { type: 'logarithmic', display: true, title: { display: true, text: 'Speedup Ratio (Log Scale)' }, ticks: { callback: (val: any) => typeof val === 'string' ? val : val.toString() + 'x' } }
+        }
+      };
+      speedupChartConfigJs = JSON.stringify({ type: 'line', data: { datasets: speedupDatasets }, options: speedupChartOptions });
+    }
+  }
 
-      const ratioDataPoints = baselineData.map(baselinePoint => {
-        const currentPoint = currentAlgoData.find(p => p.x === baselinePoint.x);
-        if (currentPoint && currentPoint.y !== null && currentPoint.y !== undefined &&
-            baselinePoint.y !== null && baselinePoint.y !== undefined && baselinePoint.y !== 0) {
-          return { x: baselinePoint.x, y: currentPoint.y / baselinePoint.y };
-        }
-        return { x: baselinePoint.x, y: null };
-      }).filter(p => p.y !== null);
+  // --- Chart 3: Incremental Test Data ---
+  let incrementalChartConfigJs = 'null';
+  if (hasIncrementalResults) {
+    const incrementalDatasets = incrementalTestArrayResults.map((singleAlgoResults, j) => {
+      const dataPoints = [];
+      for (const i in singleAlgoResults) {
+        if (Object.hasOwn(singleAlgoResults, i)) {
+          const time = singleAlgoResults[i];
+          if (time > 0) dataPoints.push({ x: Number(i), y: time });
+        }
+      }
+      const style = lineStyles[j % lineStyles.length];
+      return { label: algorithmFunctionNames[j], data: dataPoints, borderColor: style.color, backgroundColor: style.color + '33', borderWidth: 2.5, pointRadius: 1, pointHoverRadius: 4, tension: 0.2, fill: false, borderDash: style.dash, };
+    });
 
-      const style = lineStyles[i % lineStyles.length];
+    const incrementalChartConfig = {
+      type: 'line',
+      data: { datasets: incrementalDatasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Incremental Test: Raw Execution Time (Log-Log Scale) - Lower is Better' },
+          tooltip: {
+            callbacks: {
+              title: (items: any[]) => items.length > 0 ? `Array Size: ${items[0].raw.x}` : '',
+              label: (item: any) => `${item.dataset.label || ''}: ${item.raw.y.toPrecision(4)} ms`
+            }
+          }
+        },
+        scales: {
+          x: { type: 'logarithmic', display: true, title: { display: true, text: 'Array Size (Log Scale)' } },
+          y: { type: 'logarithmic', display: true, title: { display: true, text: 'Execution Time (ms) (Log Scale)' } }
+        }
+      }
+    };
+    incrementalChartConfigJs = JSON.stringify(incrementalChartConfig);
+  }
 
-      return {
-        label: `${algoName} / ${baselineAlgoName}`,
-        data: ratioDataPoints,
-        borderColor: style.color,
-        backgroundColor: style.color + '33',
-        borderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        tension: 0.1,
-        fill: false,
-        borderDash: style.dash,
-      };
-    });
+  // --- Generate HTML Content ---
+  const htmlContent = `
+<!DOCTYPE html><html><head><title>Benchmark Results</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script><style>body{font-family:sans-serif;margin:0;padding:20px;background-color:#f4f4f4;display:flex;flex-direction:column;align-items:center}.chart-container{width:90%;max-width:1000px;margin:20px auto;padding:20px;background-color:white;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.1)}h1,h2{text-align:center;color:#333}h1{margin-bottom:30px}</style></head><body><h1>Benchmark Analysis</h1>
+${benchmarkJsAlgorithmNames.length > 0 ? `<div class="chart-container"><h2>Algorithm Performance (Ops/sec)</h2><canvas id="performanceChart"></canvas></div>` : ''}
+${benchmarkJsAlgorithmNames.length > 1 ? `<div class="chart-container"><h2>Speedup Ratio Analysis</h2><canvas id="speedupChart"></canvas></div>` : ''}
+${hasIncrementalResults ? `<div class="chart-container"><h2>Incremental Test: Raw Execution Time</h2><canvas id="incrementalTestChart"></canvas></div>` : ''}
+<script>
+if(window.ChartAnnotation){Chart.register(window.ChartAnnotation);}else{console.warn('Chart.js Annotation plugin not loaded.');}
+if(${benchmarkJsAlgorithmNames.length > 0}){const perfCtx=document.getElementById('performanceChart').getContext('2d');new Chart(perfCtx,${performanceChartConfigJs});}
+if(${benchmarkJsAlgorithmNames.length > 1}){const speedupCtx=document.getElementById('speedupChart').getContext('2d');new Chart(speedupCtx,${speedupChartConfigJs});}
+if(${hasIncrementalResults}){const incrementalCtx=document.getElementById('incrementalTestChart').getContext('2d');new Chart(incrementalCtx,${incrementalChartConfigJs});}
+</script></body></html>`;
 
-    const speedupChartOptions = {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top' },
-        title: { display: true, text: `Speedup Ratio (Relative to ${baselineAlgoName})` },
-        tooltip: {
-          callbacks: {
-            title: function(tooltipItems: any[]) {
-               if (tooltipItems.length > 0) {
-                   return `Array Size: ${tooltipItems[0].raw.x}`;
-               }
-               return '';
-            },
-            label: function(tooltipItem: any) {
-                let label = tooltipItem.dataset.label || '';
-                if (label) label += ': ';
-                if (tooltipItem.raw.y !== null && tooltipItem.raw.y !== undefined) {
-                    label += `${tooltipItem.raw.y.toPrecision(4)}x`;
-                }
-                return label;
-            }
-          }
-        },
-        annotation: { 
-          annotations: {
-            baselineLine: {
-              type: 'line',
-              yMin: 1.0,
-              yMax: 1.0,
-              borderColor: 'rgba(128, 128, 128, 0.7)',
-              borderWidth: 2,
-              borderDash: [6, 6], 
-              label: {
-                content: '1.0x Baseline',
-                enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(255, 255, 255, 0.6)',
-                color: 'rgba(100, 100, 100, 1)',
-                font: { style: 'italic' },
-                yAdjust: -10,
-              }
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          type: 'logarithmic',
-          display: true,
-          title: { display: true, text: 'Array Size (Log Scale)' },
-        },
-        // --- THIS IS THE REQUESTED CHANGE ---
-        y: {
-          type: 'logarithmic',
-          display: true,
-          title: { display: true, text: 'Speedup Ratio (Log Scale)' },
-          ticks: {
-            callback: function(value: number | string) {
-              if (typeof value === 'string') return value;
-              // Use toString() for clean log-scale numbers (e.g., 1, 10, 100)
-              return value.toString() + 'x';
-            }
-          },
-        },
-      },
-    };
-    speedupChartConfigJs = JSON.stringify({ type: 'line', data: { datasets: speedupDatasets }, options: speedupChartOptions });
-  }
-
-  const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Benchmark Results</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
-    <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; display: flex; flex-direction: column; align-items: center; }
-        .chart-container { 
-            width: 90%; 
-            max-width: 1000px; 
-            margin: 20px auto; 
-            padding: 20px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1, h2 { text-align: center; color: #333; }
-        h1 { margin-bottom: 30px; }
-    </style>
-</head>
-<body>
-    <h1>Benchmark Analysis</h1>
-
-    <div class="chart-container">
-        <h2>Algorithm Performance (Ops/sec)</h2>
-        <canvas id="performanceChart"></canvas>
-    </div>
-
-    ${algorithmNames.length > 1 ? `
-    <div class="chart-container">
-        <h2>Speedup Ratio Analysis</h2>
-        <canvas id="speedupChart"></canvas>
-    </div>
-    ` : ''}
-
-    <script>
-        // Register the annotation plugin
-        if (window.ChartAnnotation) {
-            Chart.register(window.ChartAnnotation);
-        } else {
-            console.warn('Chart.js Annotation plugin (ChartAnnotation) not loaded. Annotations will not be displayed.');
-        }
-
-        const perfCtx = document.getElementById('performanceChart').getContext('2d');
-        new Chart(perfCtx, ${JSON.stringify(performanceChartConfig)});
-
-        ${algorithmNames.length > 1 ? `
-        const speedupChartCanvas = document.getElementById('speedupChart');
-        if (speedupChartCanvas) {
-            const speedupCtx = speedupChartCanvas.getContext('2d');
-            const speedupConfig = ${speedupChartConfigJs};
-            if (speedupConfig) {
-              new Chart(speedupCtx, speedupConfig);
-            }
-        }
-        ` : ''}
-    </script>
-</body>
-</html>
-`;
-
-  const plotFilePath = path.join(__dirname, "benchmark_plot.html");
-  try {
-    fs.writeFileSync(plotFilePath, htmlContent);
-    console.log(`\n📊 Plots generated: ${plotFilePath}`);
-    console.log("   Open this file in your web browser to view the charts.");
-  } catch (err) {
-    console.error("Error writing plot file:", err);
-  }
+  const plotFilePath = path.join(__dirname, "benchmark_plot.html");
+  try {
+    fs.writeFileSync(plotFilePath, htmlContent);
+    console.log(`\n📊 Plots generated: ${plotFilePath}`);
+    console.log("   Open this file in your web browser to view the charts.");
+  } catch (err) {
+    console.error("Error writing plot file:", err);
+  }
 }
 
 //
 // 5) Kick off the chain at index = 0
 //
-console.log("Starting benchmarks...");
-runSuiteForSize(0);
+// To run BOTH tests: uncomment the runSuiteForSize(0) call. The script will run the incremental test first,
+// then the benchmark.js suite, and finally generate all three plots.
+//
+// To run ONLY the incremental test: keep runSuiteForSize(0) commented out and uncomment the generatePlots call.
+//
+
+// Run the incremental test first
+let totalIncrementalTestBeginTime = performance.now();
+runIncrementalArraySizedTests();
+let totalIncrementalTestTime = performance.now() - totalIncrementalTestBeginTime;
+console.log(`Total Incremental Test Time = ${totalIncrementalTestTime / 1000} Seconds.`);
+
+
+// Then run the benchmark.js tests (optional)
+console.log("\nStarting Benchmark.js suite...");
+runSuiteForSize(0); 
+
+// If you only wanted to run the incremental test and plot its results,
+// you would comment out the line above and uncomment the line below.
+generatePlots(allBenchmarkResults);
