@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "benchmark": "^2.1.4",
+    "chart.js": "^4.4.9",
+    "chartjs-node-canvas": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/benchmark": "^2.1.5",
+    "@types/chart.js": "^2.9.41"
+  }
+}
