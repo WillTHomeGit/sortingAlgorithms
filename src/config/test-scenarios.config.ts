@@ -5,43 +5,40 @@
  * used to test the sorting algorithms. Each scenario specifies a particular type of array
  * (e.g., random, sorted, reversed, float-based, etc.) that presents a unique
  * challenge or highlights a specific performance characteristic of an algorithm.
- *
- * This file provides the full, unfiltered list of all possible scenarios. The logic for
- * filtering which scenarios are compatible with a given algorithm resides in
- * `scenario-helper.ts`.
  */
-
 
 import { generateRandomArray, generateSortedArray, generateNearlySortedArray } from "../data/testArrayGenerator";
 
-/** 
+/**
  * The underlying type structure for each "Scenario Generator".
  * This defines a simple function that the test runner can call with just the array size.
  */
 export type ScenarioGenerator = (size: number) => number[];
 
-/** 
+/**
  * The structure for each test scenario configuration.
  */
 export interface TestScenario {
     name: string; // A descriptive name for test reports and charts.
     generator: ScenarioGenerator; // The function that creates the array for the scenario.
-    dataType: 'integer' | 'float';
+    dataType: 'integer' | 'float'; // The type of data in the array (integer or float).
 }
 
-// The master list of test scenarios that your runners will import and loop through.
+/**
+ * The master list of test scenarios that your runners will import and loop through.
+ */
 export const scenariosToTest: TestScenario[] = [
-    // --- Scenarios using generateRandomArray ---
+    // Scenarios using generateRandomArray
     {
         name: 'on a random array of integers',
         // We use an arrow function to "wrap" the original generator,
         // providing the specific arguments we want for this test case.
-        generator: (size) => generateRandomArray(size, size * 2, 'integer'),
+        generator: (size) => generateRandomArray(size, size * Math.floor(Math.random() * 10) + 1, 'integer'),
         dataType: 'integer',
     },
     {
         name: 'on a random array of floats',
-        generator: (size) => generateRandomArray(size, size, 'float'),
+        generator: (size) => generateRandomArray(size, size * Math.floor(Math.random() * 10) + 1, 'float'),
         dataType: 'float',
     },
     {
@@ -58,7 +55,7 @@ export const scenariosToTest: TestScenario[] = [
         dataType: 'integer',
     },
 
-    // --- Scenarios using generateSortedArray ---
+    // Scenarios using generateSortedArray
     {
         name: 'on a perfectly sorted ascending array',
         generator: (size) => generateSortedArray(size, 'integer', false),
@@ -76,7 +73,7 @@ export const scenariosToTest: TestScenario[] = [
         dataType: 'float'
     },
 
-    // --- Scenarios using generateNearlySortedArray ---
+    // Scenarios using generateNearlySortedArray
     {
         name: 'on a nearly sorted (5% chaos) ascending array',
         // This often represents a "best-case" for algorithms like Insertion Sort.

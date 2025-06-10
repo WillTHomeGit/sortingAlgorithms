@@ -1,19 +1,6 @@
-/**
- * @file plotGenerator.ts
- * @description
- * This script serves as the "presentation layer" for the benchmark results.
- * Its responsibility is to read the raw data from the `performance-results.json` file
- * and transform it into a user-friendly HTML report containing interactive charts.
- *
- * It generates two types of charts for each scenario, ordered sequentially:
- * 1. Raw Performance: Shows the absolute execution time for each algorithm.
- * 2. Speedup Ratio: Shows the performance of each algorithm relative to the median.
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Expected data structure from the JSON results file.
 interface PerformanceResult {
     algorithmName: string;
     scenarioName: string;
@@ -21,33 +8,23 @@ interface PerformanceResult {
     executionTime: number;
 }
 
-// Transformed data structure, optimized for chart plotting.
 type ProcessedData = {
     [scenarioName: string]: {
         [algorithmName: string]: { x: number; y: number }[];
     };
 };
 
-// Type for chart configuration objects.
 type ChartConfigInfo = { chartId: string; chartConfig: string; chartTitle: string };
 
-/**
- * Manages loading, processing, and rendering benchmark data into an HTML report.
- */
 class PlotGenerator {
     private readonly results: PerformanceResult[];
     private processedData: ProcessedData = {};
-    // A palette of colors for chart lines/areas.
     private readonly COLORS = ['#36A2EB', '#FF6384', '#4BC0C0', '#FF9F40', '#9966FF', '#FFCE56', '#C9CBCF', '#E57373', '#7986CB', '#008080', '#FF2400', '#FBC02D', '#3F51B5'];
 
     constructor(private readonly inputPath: string) {
         this.results = this.loadData();
     }
 
-    /**
-     * Generates the final HTML report with interleaved charts.
-     * @param outputPath The file path where the HTML report should be saved.
-     */
     public generateReport(outputPath: string): void {
         console.log('Processing benchmark data...');
         this.processData();
@@ -56,10 +33,8 @@ class PlotGenerator {
         const allCharts: ChartConfigInfo[] = [];
         let scenarioIndex = 0;
 
-        // Iterate through each test scenario (e.g., 'Random', 'Sorted', 'Reverse Sorted')
         for (const [scenarioName, algorithms] of Object.entries(this.processedData)) {
 
-            // 1. Generate Raw Performance Chart for the current scenario.
             const perfDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => ({
                 label: algorithmName,
                 data: data,
@@ -87,12 +62,10 @@ class PlotGenerator {
 
             allCharts.push({
                 chartId: `perf-chart-${scenarioIndex}`,
-                chartConfig: JSON.stringify(perfChartConfig).replace(/<\/script/g, '<\\/script'), // Prevent script tag breaking
+                chartConfig: JSON.stringify(perfChartConfig).replace(/<\/script/g, '<\\/script'),
                 chartTitle: `Raw Performance: ${scenarioName}`
             });
 
-            // 2. Generate Speedup Ratio Chart for the same scenario.
-            // First, calculate median performance for each array size.
             const sizes = [...new Set(Object.values(algorithms).flatMap(data => data.map(d => d.x)))].sort((a, b) => a - b);
             const medianData = new Map<number, number>();
 
@@ -108,7 +81,6 @@ class PlotGenerator {
                 medianData.set(size, median);
             }
 
-            // Create datasets showing speedup relative to the median.
             const speedupDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => {
                 const ratioData = data.map(point => ({ x: point.x, y: medianData.has(point.x) && point.y > 0 ? (medianData.get(point.x)! / point.y) : 0 }));
                 return {
@@ -153,10 +125,6 @@ class PlotGenerator {
         this.saveReport(htmlContent, outputPath);
     }
 
-    /**
-     * Loads raw performance data from the specified JSON file.
-     * Handles file reading and JSON parsing errors.
-     */
     private loadData(): PerformanceResult[] {
         try {
             const rawData = fs.readFileSync(this.inputPath, 'utf-8');
@@ -168,20 +136,13 @@ class PlotGenerator {
         }
     }
 
-    /**
-     * Transforms raw results into a nested structure suitable for plotting.
-     * Organizes data by scenario and algorithm, then sorts by array size.
-     */
     private processData(): void {
         for (const result of this.results) {
-            // Initialize nested objects if they don't exist
             if (!this.processedData[result.scenarioName]) { this.processedData[result.scenarioName] = {}; }
             const scenario = this.processedData[result.scenarioName];
             if (!scenario[result.algorithmName]) { scenario[result.algorithmName] = []; }
-            // Add data point {x: arraySize, y: executionTime}
             scenario[result.algorithmName].push({ x: result.arraySize, y: result.executionTime });
         }
-        // Sort data points by array size (x-value) for each algorithm within each scenario.
         for (const scenario of Object.values(this.processedData)) {
             for (const algorithmData of Object.values(scenario)) {
                 algorithmData.sort((a, b) => a.x - b.x);
@@ -189,16 +150,8 @@ class PlotGenerator {
         }
     }
 
-    /**
-     * Generates the full HTML content for the report.
-     * Includes Chart.js and annotation plugin imports, styling, and dynamic chart scripts.
-     * @param chartConfigs An array of chart configuration objects.
-     * @returns The complete HTML string.
-     */
     private generateHtml(chartConfigs: ChartConfigInfo[]): string {
-        // Create HTML div elements for each chart canvas.
         const chartDivs = chartConfigs.map(c => `<div class="chart-container"><h2>${c.chartTitle}</h2><canvas id="${c.chartId}"></canvas></div>`).join('\n');
-        // Create JavaScript code to initialize each Chart.js instance.
         const chartScripts = chartConfigs.map(c => `new Chart(document.getElementById('${c.chartId}'), ${c.chartConfig});`).join('\n');
 
         return `
@@ -222,7 +175,6 @@ class PlotGenerator {
     ${chartDivs}
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Register Chart.js annotation plugin if available.
             if(window.ChartAnnotation) { Chart.register(window.ChartAnnotation); }
             ${chartScripts}
         });
@@ -231,16 +183,9 @@ class PlotGenerator {
 </html>`;
     }
 
-    /**
-     * Saves the generated HTML content to the specified output file.
-     * Creates directories if they don't exist.
-     * @param htmlContent The HTML string to save.
-     * @param outputPath The file path for the output HTML report.
-     */
     private saveReport(htmlContent: string, outputPath: string): void {
         try {
             const outputDir = path.dirname(outputPath);
-            // Ensure the output directory exists.
             if (!fs.existsSync(outputDir)) { fs.mkdirSync(outputDir, { recursive: true }); }
             fs.writeFileSync(outputPath, htmlContent);
             console.log(`Report successfully generated! Open this file in your browser:\n${path.resolve(outputPath)}`);
@@ -251,10 +196,6 @@ class PlotGenerator {
     }
 }
 
-/**
- * Main function to execute the plot generation.
- * Sets up input and output paths and initiates the process.
- */
 function main() {
     const reportsDir = path.join(__dirname, '../../reports');
     const inputPath = path.join(reportsDir, 'performance-results.json');

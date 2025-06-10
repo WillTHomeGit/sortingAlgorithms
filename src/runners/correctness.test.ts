@@ -1,77 +1,65 @@
 /**
  * @file correctness.test.ts
  * @description
- * This suite tests the correctness and immutability of all sorting algorithms.
- * It dynamically generates tests for each algorithm, scenario, and array size,
- * ensuring thorough verification and easy debugging.
+ * This file contains the test suite for verifying the correctness of sorting algorithms.
+ * It iterates through various algorithms and test scenarios, ensuring that each algorithm
+ * correctly sorts arrays of different sizes and types, and does not mutate the original input array.
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { ALGORITHMS_TO_TEST, Algorithm } from '../config/algorithms.config';
 import { TestScenario } from '../config/test-scenarios.config';
 import { getCompatibleScenariosFor } from '../config/scenario-helper';
 
-// Array sizes for correctness tests. Includes edge cases and small arrays.
+/**
+ * Defines a set of array sizes to be used for correctness testing.
+ * Includes edge cases like empty, single-element, and small arrays, as well as a larger size.
+ */
 const CORRECTNESS_TEST_SIZES = [0, 1, 2, 17, 100];
 
 /**
- * Generates the expected sorted array using native `.sort()`.
- * This serves as our "ground truth" for correctness.
- * @param arr The unsorted input array.
- * @returns A new, numerically sorted array.
+ * Generates the expected sorted result for a given array using JavaScript's native sort.
+ * This serves as the ground truth for correctness assertions.
+ * @param arr - The input array to be sorted.
+ * @returns A new array containing the sorted elements.
  */
-const getExpectedResult = (arr: number[]): number[] => {
-  // Use a copy to avoid modifying the original array.
-  // `a - b` is crucial for correct numeric sorting.
-  return [...arr].sort((a, b) => a - b);
-};
+const getExpectedResult = (arr: number[]): number[] => [...arr].sort((a, b) => a - b);
 
+/**
+ * Main test suite for sorting algorithm correctness.
+ * It dynamically generates tests for each algorithm and compatible scenario.
+ */
 describe('Sorting Algorithm Correctness Suite', () => {
 
-  // Loop through each sorting algorithm defined in the config.
-  ALGORITHMS_TO_TEST.forEach((algorithm: Algorithm) => {
-    describe(`Algorithm: ${algorithm.name}`, () => {
-      // Get only scenarios that this algorithm is set up to handle.
-      const compatibleScenarios = getCompatibleScenariosFor(algorithm);
+    // Iterate over each algorithm defined in the configuration.
+    ALGORITHMS_TO_TEST.forEach((algorithm: Algorithm) => {
+        describe(`Algorithm: ${algorithm.name}`, () => {
+            
+            // Determine which test scenarios are compatible with the current algorithm.
+            const compatibleScenarios = getCompatibleScenariosFor(algorithm);
 
-      // For each compatible scenario...
-      compatibleScenarios.forEach((scenario: TestScenario) => {
-
-        describe(`Scenario: ${scenario.name}`, () => {
-
-          // ...test against specific array sizes.
-          CORRECTNESS_TEST_SIZES.forEach((size: number) => {
-
-            let inputArray: number[];
-            let originalSnapshot: number[]; // A copy of the input before sorting
-            let actualOutput: number[];     // The result from the algorithm
-            let expectedOutput: number[];   // The known correct sorted array
-
-            // Setup for the 'it' blocks. Runs once per size/scenario combo.
-            // This is efficient, as the array generation and sort execution happen only once.
-            beforeAll(() => {
-              // Arrange data
-              inputArray = scenario.generator(size);
-              originalSnapshot = [...inputArray]; // Save original state to check immutability
-              expectedOutput = getExpectedResult(inputArray);
-
-              // Act: Run the algorithm (now purely synchronous)
-              actualOutput = algorithm.fn(inputArray);
+            // For each compatible scenario, run a nested test suite.
+            compatibleScenarios.forEach((scenario: TestScenario) => {
+                describe(`Scenario: ${scenario.name}`, () => {
+                    
+                    // Run the same test for each defined correctness test size.
+                    it.each(
+                        CORRECTNESS_TEST_SIZES.map(size => [size])
+                    )('should correctly sort and not mutate an array of size %s', (size) => {
+                        // Arrange: Prepare the input data and expected output.
+                        const inputArray = scenario.generator(size); // Generate array based on scenario and size.
+                        const originalSnapshot = [...inputArray]; // Create a copy to check for mutation.
+                        const expectedOutput = getExpectedResult(inputArray); // Get the correctly sorted version.
+                        
+                        // Act: Execute the algorithm's sorting function.
+                        const actualOutput = algorithm.fn(inputArray);
+                        
+                        // Assert: Verify the results.
+                        expect(actualOutput).toEqual(expectedOutput); // Check if the output is correctly sorted.
+                        expect(inputArray).toEqual(originalSnapshot); // Check if the original array was not modified.
+                    });
+                });
             });
-
-            // Test 1: Check if the algorithm's output is correctly sorted.
-            it(`should produce a correctly sorted array for size ${size}`, () => {
-              expect(actualOutput).toEqual(expectedOutput);
-            });
-
-            // Test 2: Check if the algorithm mutated the original input array.
-            it(`should not mutate the original input array for size ${size}`, () => {
-              expect(inputArray).toEqual(originalSnapshot);
-            });
-
-          }); // End of size loop
-        }); // End of scenario describe
-      }); // End of scenario loop
-    }); // End of algorithm describe
-  }); // End of algorithm loop
-}); // End of main suite
+        });
+    });
+});

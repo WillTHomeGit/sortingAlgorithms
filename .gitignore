@@ -12,6 +12,9 @@
 # Ignore all files inside the reports directory, but not the directory itself.
 # This prevents generated JSON and HTML files from being committed.
 /reports/*
+projectCode.txt
+projectTextScraper.js
+projectTextScraper.ts
 
 # Logs
 # Package manager-specific log files.

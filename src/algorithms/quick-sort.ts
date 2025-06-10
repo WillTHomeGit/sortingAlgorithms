@@ -1,9 +1,5 @@
-
 /**
  * Swaps two elements in an array.
- * @param arr The array.
- * @param i Index of the first element.
- * @param j Index of the second element.
  */
 function swap(arr: number[], i: number, j: number): void {
     const temp = arr[i];
@@ -13,79 +9,68 @@ function swap(arr: number[], i: number, j: number): void {
 
 /**
  * Partitions the array segment using the last element as the pivot.
- * Elements smaller than the pivot are moved to the left, and larger to the right.
- * @param arr The array to partition.
- * @param low The starting index of the segment.
- * @param high The ending index of the segment.
- * @returns The final index of the pivot.
  */
 function partition(arr: number[], low: number, high: number): number {
+    // The pivot is arr[high] (which was set by our median-of-three logic).
     const pivot = arr[high];
-    let i = low - 1; // Index of smaller element
+    let i = low - 1; 
 
     for (let j = low; j < high; j++) {
-        // If the current element is smaller than or equal to the pivot
         if (arr[j] <= pivot) {
             i++;
             swap(arr, i, j);
         }
     }
-
-    // Place the pivot element in its correct position
+    
     swap(arr, i + 1, high);
     return i + 1;
 }
 
 /**
- * A robust Quick Sort implementation that uses median-of-three pivot selection
- * to avoid worst-case behavior on sorted or nearly-sorted arrays.
- * @param arr The array to sort.
- * @param low The starting index.
- * @param high The ending index.
+ * A truly robust Quick Sort that combines median-of-three pivot selection
+ * with tail-call elimination to prevent stack overflow on all inputs.
  */
 function robustQuickSort(arr: number[], low: number, high: number): void {
-    if (low < high) {
-        // --- Median-of-Three Pivot Selection ---
+    // **CHANGED**: The recursive block is now a while loop.
+    // This loop handles the sorting of the LARGER partition, preventing deep recursion.
+    while (low < high) {
+        // --- Median-of-Three Pivot Selection (Your code, which is great!) ---
         const mid = Math.floor(low + (high - low) / 2);
-
-        // Order the low, mid, and high elements
         if (arr[low] > arr[mid]) swap(arr, low, mid);
         if (arr[low] > arr[high]) swap(arr, low, high);
         if (arr[mid] > arr[high]) swap(arr, mid, high);
-
-        // Now, arr[mid] is the median. Move it to the end to be the pivot.
+        // Move the median pivot to the end for the partition function.
         swap(arr, mid, high);
         // --- End of Pivot Selection ---
 
         const pivotIndex = partition(arr, low, high);
 
-        // Recursively sort the two sub-arrays
-        robustQuickSort(arr, low, pivotIndex - 1);
-        robustQuickSort(arr, pivotIndex + 1, high);
+        // **CHANGED**: Instead of two recursive calls, we now decide which partition is smaller.
+        const leftSize = pivotIndex - 1 - low;
+        const rightSize = high - (pivotIndex + 1);
+
+        if (leftSize < rightSize) {
+            // Recurse on the SMALLER (left) partition.
+            robustQuickSort(arr, low, pivotIndex - 1);
+            // And then loop to handle the LARGER (right) partition.
+            low = pivotIndex + 1;
+        } else {
+            // Recurse on the SMALLER (right) partition.
+            robustQuickSort(arr, pivotIndex + 1, high);
+            // And then loop to handle the LARGER (left) partition.
+            high = pivotIndex - 1;
+        }
     }
 }
 
 /**
  * Sorts an array of numbers using the quicksort algorithm.
- * This is a recursive, divide-and-conquer algorithm.
- * The implementation uses the last element as the pivot and is not in-place,
- * meaning it returns a new sorted array.
- *
- * Average Time Complexity: O(n log n)
- * Worst-Case Time Complexity: O(n^2)
- *
- * @param arr The array of numbers to sort.
- * @returns A new array containing the numbers in sorted order.
  */
 export function quickSort(arr: number[]): number[] {
-    // Adhere to the project's non-mutation requirement by sorting a copy.
     const arrCopy = [...arr];
-    
     if (arrCopy.length <= 1) {
         return arrCopy;
     }
-
     robustQuickSort(arrCopy, 0, arrCopy.length - 1);
-
     return arrCopy;
 }

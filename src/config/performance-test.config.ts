@@ -1,40 +1,43 @@
 /**
  * @file performance-test.config.ts
  * @description
- * This file acts as the primary "control panel" for the performance benchmark runner.
- * It contains all the parameters that dictate how the performance tests are executed,
- * such as the list of array sizes to test against, the number of samples to take
- * for each test, and the threshold for skipping slow algorithms.
- *
- * It demonstrates how to combine a static list of sizes with dynamically generated
- * ones to create a comprehensive yet flexible set of test parameters.
+ * This file configures the parameters for performance testing of sorting algorithms.
+ * It defines static test array sizes and parameters for dynamically generating
+ * incremental test sizes, along with the number of samples to run per size.
  */
 
+/**
+ * Configuration object for performance tests.
+ */
 export const performanceTestConfig = {
     /**
-     * A fixed list of array sizes to benchmark against for specific data points.
+     * An array of specific, fixed sizes for test arrays.
      */
     staticTestSizes: [
         100_000
     ],
 
     /**
-     * Parameters to dynamically generate additional test sizes.
+     * Parameters for generating a range of test sizes dynamically.
      */
     dynamicTestParameters: {
-        enabled: true, // You can set this to false to turn off dynamic generation
-        startingSize: 5,
-        maxSize: 30_000,
-        growthFactor: 1.1
+        enabled: true, // Whether to use dynamic test sizes
+        startingSize: 5, // The smallest array size to test
+        maxSize: 30_000, // The largest array size to test
+        growthFactor: 1.1 // Factor by which array size increases in each step
     },
 
     /**
-     * The number of times to run each sort to get a stable average time.
+     * The number of times each algorithm will be run for a given array size.
      */
     samplesPerSize: 5,
 };
 
-// STEP 2: Define your generator function (your code is perfect).
+/**
+ * Generates an array of incrementally growing test sizes based on provided parameters.
+ * @param params - Object containing startingSize, maxSize, and growthFactor.
+ * @returns An array of numbers representing the test sizes.
+ */
 function generateIncrementalTestSizes(params: { startingSize: number, maxSize: number, growthFactor: number }): number[] {
     const sizes: number[] = [];
     let current = params.startingSize;
@@ -45,27 +48,20 @@ function generateIncrementalTestSizes(params: { startingSize: number, maxSize: n
     return sizes;
 }
 
-// STEP 3: Generate, combine, and export the final list of test sizes.
-
-// Start with the static list. Using a Set automatically handles duplicates for us.
+// Combine static and dynamically generated sizes, ensuring uniqueness.
 const combinedSizes = new Set<number>(performanceTestConfig.staticTestSizes);
 
-// Check if dynamic generation is enabled
+// If dynamic test parameters are enabled, generate and add them to the set.
 if (performanceTestConfig.dynamicTestParameters.enabled) {
-    // Run your function and SAVE the result
     const dynamicSizes = generateIncrementalTestSizes(performanceTestConfig.dynamicTestParameters);
     
-    // Add the newly generated sizes to our set
     dynamicSizes.forEach(size => combinedSizes.add(size));
 }
 
-// Convert the Set back to an array and sortSD it numerically.
+// Convert the set back to an array and sort it for consistent testing order.
 const finalSizes = Array.from(combinedSizes).sort((a, b) => a - b);
 
-
-// STEP 4: EXPORT the final, ready-to-use array.
 /**
- * The definitive list of array sizes to be used in the performance benchmark.
- * This list is a combination of the static and dynamically generated sizes.
+ * The final, sorted array of all test sizes to be used in performance benchmarks.
  */
 export const PERFORMANCE_TEST_SIZES = finalSizes;

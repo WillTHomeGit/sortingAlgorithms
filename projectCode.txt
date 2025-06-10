@@ -1,0 +1,1763 @@
+--- src\algorithms\bitwise-radix-sort.ts ---
+
+export function bitwiseRadixSort(arr: number[]): number[] {
+    let workArr = [...arr];
+    let n = workArr.length;
+
+    let max = 0;
+    for(const num of workArr) {
+        if(num > max) {
+            max = num;
+        }
+    }
+    
+    for (let shift = 0; (max >> shift) > 0; shift += 8) {
+        const output = new Array(n).fill(0);
+        
+        const count = new Array(256).fill(0);
+
+        for (let i = 0; i < n; i++) {
+            const digit = (workArr[i] >> shift) & 255;
+            count[digit]++;
+        }
+
+        for (let i = 1; i < 256; i++) {
+            count[i] += count[i - 1];
+        }
+
+        for (let i = n - 1; i >= 0; i--) {
+            const digit = (workArr[i] >> shift) & 255;
+            const position = count[digit] - 1;
+            output[position] = workArr[i];
+            count[digit]--;
+        }
+
+        workArr = output;
+    }
+
+    return workArr;
+}
+
+
+--- src\algorithms\bubble-sort-smart.ts ---
+
+/**
+ * Sorts an array using an optimized Bubble Sort.
+ * Includes early termination and last-swap optimization.
+ * Creates a new array, original is unchanged.
+ */
+export function bubbleSortSmart(arr: number[]): number[] {
+  // Create a mutable copy to sort
+  const newAry: number[] = [...arr];
+  const n: number = newAry.length;
+
+  let changed: boolean;        // Flag if any swaps occurred in a pass
+  let newEnd: number = n - 1;  // Upper bound for the inner loop (unsorted part)
+  let lastSwap: number = 0;    // Index of the last swap in a pass
+
+  // Loop until the array is sorted (no more swaps needed)
+  while (newEnd > 0) {
+    changed = false; // Reset for current pass
+    lastSwap = 0;    // Reset for current pass
+
+    // Iterate through the unsorted portion
+    for (let j = 0; j < newEnd; j++)
+    {
+        // Compare adjacent elements
+        if (newAry[j] > newAry[j + 1])
+        {
+            // Swap if out of order
+            const tmp: number = newAry[j];
+            newAry[j] = newAry[j+1];
+            newAry[j+1] = tmp;
+
+            changed = true;   // A swap happened
+            lastSwap = j;     // Record last swap index
+        }
+    }
+
+    // Optimization: If no swaps, array is sorted.
+    if (!changed) break;
+
+    // Optimization: Shrink unsorted portion.
+    // Elements after lastSwap are now in place.
+    newEnd = lastSwap;
+  }
+  return newAry;
+}
+
+--- src\algorithms\bubble-sort.ts ---
+
+export function bubbleSort(arr: number[]): number[] {
+    // Create a mutable copy of the input array
+    const newAry: number[] = [...arr];
+    const n: number = newAry.length;
+
+    // Outer loop controls the number of passes
+    // After each pass, the largest unsorted element is at its correct position
+    for (let i: number = n-1; i > 0; i--) 
+    {
+        // Inner loop for comparisons and swaps
+        // It goes up to i because elements after index i are already sorted
+        for (let j: number = 0; j < i; j++)
+        {
+            // Compare adjacent elements
+            if (newAry[j] > newAry[j+1]) {
+                // Swap elements if they are in the wrong order
+                const tElement: number = newAry[j];
+                newAry[j] = newAry[j+1];
+                newAry[j+1] = tElement;
+            }
+        }
+    }
+    // Return the sorted array
+    return newAry;
+}
+
+--- src\algorithms\bucket-sort.ts ---
+
+import { insertionSort } from './insertion-sort'; // We'll use Insertion Sort for the buckets!
+
+/**
+ * An implementation of Bucket Sort, which distributes elements into a number
+ * of buckets and then sorts each bucket individually. It is highly effective
+ * for uniformly distributed data and can handle floats.
+ * @param arr The original array.
+ * @param bucketSize The number of elements each bucket can hold. Defaults to 5.
+ * @returns A new, sorted array.
+ */
+export function bucketSort(arr: number[], bucketSize: number = 5): number[] {
+    if (arr.length <= 1) {
+        return [...arr];
+    }
+
+    // 1. Find min and max values to determine the range.
+    let min = arr[0];
+    let max = arr[0];
+    for (let i = 1; i < arr.length; i++) {
+        if (arr[i] < min) {
+            min = arr[i];
+        } else if (arr[i] > max) {
+            max = arr[i];
+        }
+    }
+
+    // 2. Create the buckets.
+    const bucketCount = Math.floor((max - min) / bucketSize) + 1;
+    const buckets: number[][] = Array.from({ length: bucketCount }, () => []);
+
+    // 3. Distribute the elements into the buckets.
+    for (let i = 0; i < arr.length; i++) {
+        const bucketIndex = Math.floor((arr[i] - min) / bucketSize);
+        buckets[bucketIndex].push(arr[i]);
+    }
+
+    // 4. Sort each bucket and concatenate the results.
+    const sortedArray: number[] = [];
+    for (let i = 0; i < buckets.length; i++) {
+        // Using Insertion Sort is efficient here as buckets are likely small.
+        const sortedBucket = insertionSort(buckets[i]);
+        sortedArray.push(...sortedBucket);
+    }
+
+    return sortedArray;
+}
+
+--- src\algorithms\counting-sort.ts ---
+
+/**
+ * Sorts an array of non-negative integers using the counting sort algorithm.
+ * This is a non-comparison based sorting technique.
+ *
+ * NOTE: This implementation is designed for non-negative integers and is not stable.
+ * It is highly efficient when the range of input values (k) is not
+ * significantly larger than the number of items (n).
+ *
+ * Time Complexity: O(n + k) where n is the number of elements and k is the maximum value.
+ *
+ * @param arr The array of non-negative integers to sort.
+ * @returns A new array containing the numbers in sorted order.
+ */
+export function countingSort(arr: number[]) : number[] {
+    // Handle trivial cases
+    if (arr.length <= 1) {
+        return [...arr]; // Return a copy for consistency with other functions
+    }
+
+    // --- 1. Find the maximum value ---
+    // This determines the size of our temporary counting array.
+    let max = 0;
+    for (const num of arr) {
+        if (num > max) {
+            max = num;
+        }
+    }
+
+    // --- 2. Create the counting array ---
+    // This array will store the frequency of each number.
+    // The size is `max + 1` to include 0 up to the maximum value.
+    // e.g., if max is 99, we need an array of size 100 for indices 0-99.
+    const counts = new Array(max + 1).fill(0);
+
+    // --- 3. Populate the counting array ---
+    // Iterate through the input array. For each number, increment its
+    // corresponding index in the `counts` array.
+    for (const num of arr) {
+        counts[num]++;
+    }
+
+    // --- 4. Reconstruct the sorted array ---
+    const sortedArray: number[] = [];
+    // Iterate through the `counts` array from 0 up to the max value.
+    for (let i = 0; i <= max; i++) {
+        // Check if the number 'i' appeared in the original array.
+        while (counts[i] > 0) {
+            // As long as its count is greater than zero, push 'i' into our result.
+            sortedArray.push(i);
+            // Decrement the count, as we've now "placed" one instance of 'i'.
+            counts[i]--;
+        }
+    }
+
+    return sortedArray;
+}
+
+--- src\algorithms\heap-sort.ts ---
+
+// Helper function for Heap Sort.
+// This function ensures that the subtree rooted at index `i` satisfies the Max Heap property.
+// `n` is the size of the heap.
+function heapify(arr: number[], n: number, i: number): void {
+    let largest = i; // Initialize largest as the root of the subtree
+    const leftChildIndex = 2 * i + 1;
+    const rightChildIndex = 2 * i + 2;
+
+    // Check if the left child exists and is greater than the root
+    if (leftChildIndex < n && arr[leftChildIndex] > arr[largest]) {
+        largest = leftChildIndex;
+    }
+
+    // Check if the right child exists and is greater than the current largest element
+    if (rightChildIndex < n && arr[rightChildIndex] > arr[largest]) {
+        largest = rightChildIndex;
+    }
+
+    // If the largest element is not the root, we need to swap them
+    if (largest !== i) {
+        // Swap the root with the largest element
+        [arr[i], arr[largest]] = [arr[largest], arr[i]];
+
+        // Recursively call heapify on the affected subtree to ensure it also
+        // satisfies the Max Heap property.
+        heapify(arr, n, largest);
+    }
+}
+
+/**
+ * Sorts an array of numbers using the Heap Sort algorithm.
+ *
+ * Time Complexity: O(n log n) for all cases (worst, average, best).
+ * Space Complexity: O(1) (in-place).
+ *
+ * @param arr The array of numbers to sort.
+ * @returns A new array containing the numbers in sorted order.
+ */
+export function heapSort(arr: number[]): number[] {
+    // We work on a copy to avoid mutating the original array, matching other functions.
+    const heapArr = [...arr];
+    const n = heapArr.length;
+
+    // --- Phase 1: Build a Max Heap from the input array ---
+    // We start from the last non-leaf node and move up to the root.
+    // A non-leaf node is any node with an index less than n / 2.
+    for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+        heapify(heapArr, n, i);
+    }
+
+    // --- Phase 2: Extract elements from the heap one by one ---
+    for (let i = n - 1; i > 0; i--) {
+        // The largest element is at the root (index 0). Move it to the end.
+        [heapArr[0], heapArr[i]] = [heapArr[i], heapArr[0]];
+
+        // The heap is now smaller. Call heapify on the reduced heap (size `i`)
+        // to fix the root, which was just disrupted by the swap.
+        heapify(heapArr, i, 0);
+    }
+
+    return heapArr;
+}
+
+--- src\algorithms\index.ts ---
+
+// Get all the info from the other sorting files and export them from 1 file.
+
+export * from './bubble-sort';
+export * from './bubble-sort-smart';
+export * from './insertion-sort';
+export * from './selection-sort';
+export * from './merge-sort';
+export * from './quick-sort';
+export * from './counting-sort';
+export * from './radix-sort';
+export * from './bitwise-radix-sort';
+export * from './heap-sort';
+export * from './shell-sort';
+export * from './bucket-sort';
+export * from './tim-sort';
+
+
+
+--- src\algorithms\insertion-sort.ts ---
+
+/**
+ * Sorts an array using the Insertion Sort algorithm.
+ * Creates a new array, leaving the original unchanged.
+ */
+export function insertionSort(arr: number[]) : number[] {
+    // Create a mutable copy to sort
+    const newAry: number[] = [...arr];
+    const n: number = newAry.length;
+
+    // Start from the second element (first element is considered sorted)
+    for (let i = 1; i < n; i++) {
+        let j: number = i - 1;  // Pointer for the sorted part
+        let key: number = newAry[i]; // The element to be inserted into the sorted part
+
+        // Shift elements in the sorted portion that are greater than 'key'
+        // to make space for 'key'
+        while (j >= 0 && newAry[j] > key) {
+            newAry[j + 1] = newAry[j]; // Shift element right
+            j = j - 1;                 // Move pointer left
+        }
+        // Place 'key' in its correct position
+        newAry[j + 1] = key;
+    }
+
+    return newAry; // Return the sorted copy
+}
+
+--- src\algorithms\merge-sort.ts ---
+
+/**
+ * Helper function for mergeSort. Merges two sorted arrays into one sorted array.
+ * @param left A sorted array of numbers.
+ * @param right A sorted array of numbers.
+ * @returns A new, single sorted array containing all elements from left and right.
+ */
+function merge(left: number[], right: number[]): number[] {
+    const result: number[] = [];
+    let leftIndex = 0;
+    let rightIndex = 0;
+
+    // Compare elements from left and right arrays and push the smaller one to the result
+    while (leftIndex < left.length && rightIndex < right.length) {
+        if (left[leftIndex] < right[rightIndex]) {
+            result.push(left[leftIndex]);
+            leftIndex++; // Move to the next element in the left array
+        } else {
+            result.push(right[rightIndex]);
+            rightIndex++; // Move to the next element in the right array
+        }
+    }
+
+    // After the loop, one of the arrays may still have elements left.
+    // Concatenate the remaining elements from either the left or right array.
+    // (The slice method will just return an empty array if the index is out of bounds)
+    return result.concat(left.slice(leftIndex)).concat(right.slice(rightIndex));
+}
+
+/**
+ * Sorts an array of numbers using the merge sort algorithm.
+ * This is a recursive, divide-and-conquer algorithm.
+ * Time Complexity: O(n log n) in all cases.
+ * @param arr The array of numbers to sort.
+ * @returns A new array containing the numbers in sorted order.
+ */
+export function mergeSort(arr: number[]): number[] {
+    // Base case: an array with 0 or 1 element is already sorted
+    if (arr.length <= 1) {
+        return arr;
+    }
+
+    // --- Divide Phase ---
+    // Split the array into two halves
+    const middle = Math.floor(arr.length / 2);
+    const leftHalf = arr.slice(0, middle);
+    const rightHalf = arr.slice(middle);
+
+    // Recursively sort both halves
+    const sortedLeft = mergeSort(leftHalf);
+    const sortedRight = mergeSort(rightHalf);
+
+    // --- Conquer Phase ---
+    // Merge the sorted halves
+    return merge(sortedLeft, sortedRight);
+}
+
+--- src\algorithms\quick-sort.ts ---
+
+/**
+ * Swaps two elements in an array.
+ */
+function swap(arr: number[], i: number, j: number): void {
+    const temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
+}
+
+/**
+ * Partitions the array segment using the last element as the pivot.
+ */
+function partition(arr: number[], low: number, high: number): number {
+    // The pivot is arr[high] (which was set by our median-of-three logic).
+    const pivot = arr[high];
+    let i = low - 1; 
+
+    for (let j = low; j < high; j++) {
+        if (arr[j] <= pivot) {
+            i++;
+            swap(arr, i, j);
+        }
+    }
+    
+    swap(arr, i + 1, high);
+    return i + 1;
+}
+
+/**
+ * A truly robust Quick Sort that combines median-of-three pivot selection
+ * with tail-call elimination to prevent stack overflow on all inputs.
+ */
+function robustQuickSort(arr: number[], low: number, high: number): void {
+    // **CHANGED**: The recursive block is now a while loop.
+    // This loop handles the sorting of the LARGER partition, preventing deep recursion.
+    while (low < high) {
+        // --- Median-of-Three Pivot Selection (Your code, which is great!) ---
+        const mid = Math.floor(low + (high - low) / 2);
+        if (arr[low] > arr[mid]) swap(arr, low, mid);
+        if (arr[low] > arr[high]) swap(arr, low, high);
+        if (arr[mid] > arr[high]) swap(arr, mid, high);
+        // Move the median pivot to the end for the partition function.
+        swap(arr, mid, high);
+        // --- End of Pivot Selection ---
+
+        const pivotIndex = partition(arr, low, high);
+
+        // **CHANGED**: Instead of two recursive calls, we now decide which partition is smaller.
+        const leftSize = pivotIndex - 1 - low;
+        const rightSize = high - (pivotIndex + 1);
+
+        if (leftSize < rightSize) {
+            // Recurse on the SMALLER (left) partition.
+            robustQuickSort(arr, low, pivotIndex - 1);
+            // And then loop to handle the LARGER (right) partition.
+            low = pivotIndex + 1;
+        } else {
+            // Recurse on the SMALLER (right) partition.
+            robustQuickSort(arr, pivotIndex + 1, high);
+            // And then loop to handle the LARGER (left) partition.
+            high = pivotIndex - 1;
+        }
+    }
+}
+
+/**
+ * Sorts an array of numbers using the quicksort algorithm.
+ */
+export function quickSort(arr: number[]): number[] {
+    const arrCopy = [...arr];
+    if (arrCopy.length <= 1) {
+        return arrCopy;
+    }
+    robustQuickSort(arrCopy, 0, arrCopy.length - 1);
+    return arrCopy;
+}
+
+--- src\algorithms\radix-sort.ts ---
+
+// Helper function for Radix Sort (not exported).
+// It performs a stable counting sort on the array based on a specific digit's place value.
+function countingSortForRadix(arr: number[], digitPlace: number): number[] {
+    const n = arr.length;
+    const output = new Array(n).fill(0);
+    // Count array for digits 0-9
+    const count = new Array(10).fill(0);
+
+    // 1. Store the count of each digit at the current digitPlace
+    for (let i = 0; i < n; i++) {
+        const digit = Math.floor(arr[i] / digitPlace) % 10;
+        count[digit]++;
+    }
+
+    // 2. Modify the count array to store the cumulative sum.
+    // This gives us the correct final position for each element.
+    for (let i = 1; i < 10; i++) {
+        count[i] += count[i - 1];
+    }
+
+    // 3. Build the output array by placing elements in their sorted positions.
+    // We iterate backwards to ensure the sort is stable.
+    for (let i = n - 1; i >= 0; i--) {
+        const digit = Math.floor(arr[i] / digitPlace) % 10;
+        const position = count[digit] - 1;
+        output[position] = arr[i];
+        count[digit]--;
+    }
+
+    return output;
+}
+
+/**
+ * Sorts an array of non-negative integers using the Radix Sort algorithm.
+ * It sorts numbers digit by digit, from the least significant to the most significant.
+ *
+ * NOTE: This implementation is designed for non-negative integers.
+ *
+ * Time Complexity: O(d * (n + k)) where d is digits in the max number,
+ * n is the number of elements, and k is the radix/base (10).
+ *
+ * @param arr The array of non-negative integers to sort.
+ * @returns A new array containing the numbers in sorted order.
+ */
+export function radixSort(arr: number[]): number[] {
+    // Handle trivial cases
+    if (arr.length <= 1) {
+        return [...arr];
+    }
+
+    // 1. Find the maximum number to determine the number of digits.
+    let max = 0;
+    for (const num of arr) {
+        if (num > max) {
+            max = num;
+        }
+    }
+
+    // Create a copy to sort.
+    let sortedArr = [...arr];
+
+    // 2. Perform a counting sort for every digit place (1, 10, 100, ...).
+    // The loop continues as long as there's a digit in the current place for the max number.
+    for (let digitPlace = 1; Math.floor(max / digitPlace) > 0; digitPlace *= 10) {
+        sortedArr = countingSortForRadix(sortedArr, digitPlace);
+    }
+
+    return sortedArr;
+}
+
+--- src\algorithms\selection-sort.ts ---
+
+export function selectionSort(arr: number[]): number[] {
+  // make a copy so we don’t mutate the original
+  const newAry: number[] = [...arr];
+  const n = newAry.length;
+
+  for (let j = 0; j < n - 1; j++) {
+    // start by assuming the current "j" element is the minimum
+    let min = newAry[j];
+    let minIndex = j;
+
+    // look for a smaller element to the right of j
+    for (let i = j + 1; i < n; i++) {
+      if (newAry[i] < min) {
+        min = newAry[i];
+        minIndex = i;
+      }
+    }
+
+    // if we found a new minimum, swap it with position j
+    if (minIndex !== j) {
+      newAry[minIndex] = newAry[j];
+      newAry[j] = min;
+    }
+  }
+
+  return newAry;
+}
+
+--- src\algorithms\shell-sort.ts ---
+
+/**
+ * Sorts an array of numbers using the Shell Sort algorithm with Knuth's gap sequence.
+ * Shell sort is an optimization of insertion sort that allows the exchange of items that are far apart.
+ *
+ * Time Complexity: Varies by gap sequence. For this sequence, it's between O(n) and O(n^(3/2)).
+ *
+ * @param arr The array of numbers to sort.
+ * @returns A new array containing the numbers in sorted order.
+ */
+export function shellSort(arr: number[]): number[] {
+    const newArr = [...arr];
+    const n = newArr.length;
+
+    // --- 1. Generate the Gap Sequence (Knuth's Sequence) ---
+    // Start with a gap of 1 and generate the sequence h = 3*h + 1
+    // until it's larger than about a third of the array size.
+    let gap = 1;
+    while (gap < n / 3) {
+        gap = gap * 3 + 1; // 1, 4, 13, 40, 121, ...
+    }
+
+    // --- 2. Perform Gapped Insertion Sort ---
+    // Start with the largest gap and work down to a gap of 1.
+    while (gap > 0) {
+        // This outer loop iterates through the elements, starting from the first
+        // element in the second "gapped" sub-array.
+        for (let i = gap; i < n; i++) {
+            // Store the current element to be inserted.
+            const temp = newArr[i];
+            let j = i;
+
+            // This inner loop is the gapped insertion sort.
+            // It shifts earlier, gapped elements up until the correct location for `temp` is found.
+            while (j >= gap && newArr[j - gap] > temp) {
+                newArr[j] = newArr[j - gap];
+                j -= gap;
+            }
+            
+            // Place temp in its correct sorted position.
+            newArr[j] = temp;
+        }
+
+        // Reduce the gap for the next pass. We reverse the formula used to generate it.
+        gap = Math.floor(gap / 3);
+    }
+
+    return newArr;
+}
+
+--- src\algorithms\tim-sort.ts ---
+
+/**
+ * A wrapper for the native, highly optimized Timsort algorithm provided by
+ * the JavaScript V8 engine (in Node.js and browsers). Timsort is a hybrid
+ * algorithm, combining Insertion Sort and Merge Sort for exceptional performance
+ * on real-world, often partially-sorted, data.
+ * @param arr The original array.
+ * @returns A new, sorted array.
+ */
+export function timSort(arr: number[]): number[] {
+    // Create a copy to adhere to the non-mutation requirement.
+    const arrCopy = [...arr];
+
+    // The compare function is essential for correct numerical sorting.
+    arrCopy.sort((a, b) => a - b);
+
+    return arrCopy;
+}
+
+--- src\analysis\plotGenerator.ts ---
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface PerformanceResult {
+    algorithmName: string;
+    scenarioName: string;
+    arraySize: number;
+    executionTime: number;
+}
+
+type ProcessedData = {
+    [scenarioName: string]: {
+        [algorithmName: string]: { x: number; y: number }[];
+    };
+};
+
+type ChartConfigInfo = { chartId: string; chartConfig: string; chartTitle: string };
+
+class PlotGenerator {
+    private readonly results: PerformanceResult[];
+    private processedData: ProcessedData = {};
+    private readonly COLORS = ['#36A2EB', '#FF6384', '#4BC0C0', '#FF9F40', '#9966FF', '#FFCE56', '#C9CBCF', '#E57373', '#7986CB', '#008080', '#FF2400', '#FBC02D', '#3F51B5'];
+
+    constructor(private readonly inputPath: string) {
+        this.results = this.loadData();
+    }
+
+    public generateReport(outputPath: string): void {
+        console.log('Processing benchmark data...');
+        this.processData();
+
+        console.log('Generating interleaved chart configurations...');
+        const allCharts: ChartConfigInfo[] = [];
+        let scenarioIndex = 0;
+
+        for (const [scenarioName, algorithms] of Object.entries(this.processedData)) {
+
+            const perfDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => ({
+                label: algorithmName,
+                data: data,
+                borderColor: this.COLORS[algIndex % this.COLORS.length],
+                backgroundColor: this.COLORS[algIndex % this.COLORS.length] + '33',
+                tension: 0.1, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5,
+            }));
+
+            const perfChartConfig = {
+                type: 'line',
+                data: { datasets: perfDatasets },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' as const },
+                        title: { display: true, text: 'Raw Execution Time', font: { size: 18 } },
+                        tooltip: { callbacks: { title: (items: any[]) => `Array Size: ${items[0].raw.x.toLocaleString()}`, label: (item: any) => `${item.dataset.label}: ${item.raw.y.toFixed(4)} ms` } }
+                    },
+                    scales: {
+                        x: { type: 'logarithmic' as const, title: { display: true, text: 'Array Size (Logarithmic Scale)' } },
+                        y: { type: 'logarithmic' as const, title: { display: true, text: 'Execution Time in ms (Logarithmic Scale)' } }
+                    }
+                }
+            };
+
+            allCharts.push({
+                chartId: `perf-chart-${scenarioIndex}`,
+                chartConfig: JSON.stringify(perfChartConfig).replace(/<\/script/g, '<\\/script'),
+                chartTitle: `Raw Performance: ${scenarioName}`
+            });
+
+            const sizes = [...new Set(Object.values(algorithms).flatMap(data => data.map(d => d.x)))].sort((a, b) => a - b);
+            const medianData = new Map<number, number>();
+
+            for (const size of sizes) {
+                const timesAtThisSize = Object.values(algorithms)
+                    .map(data => data.find(d => d.x === size)?.y)
+                    .filter((t): t is number => t !== undefined && t > 0);
+                if (timesAtThisSize.length === 0) continue;
+
+                timesAtThisSize.sort((a, b) => a - b);
+                const mid = Math.floor(timesAtThisSize.length / 2);
+                const median = timesAtThisSize.length % 2 !== 0 ? timesAtThisSize[mid] : (timesAtThisSize[mid - 1] + timesAtThisSize[mid]) / 2;
+                medianData.set(size, median);
+            }
+
+            const speedupDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => {
+                const ratioData = data.map(point => ({ x: point.x, y: medianData.has(point.x) && point.y > 0 ? (medianData.get(point.x)! / point.y) : 0 }));
+                return {
+                    label: algorithmName,
+                    data: ratioData,
+                    borderColor: this.COLORS[algIndex % this.COLORS.length],
+                    backgroundColor: this.COLORS[algIndex % this.COLORS.length] + '33',
+                    tension: 0.1, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5,
+                };
+            });
+
+            const speedupChartConfig = {
+                type: 'line',
+                data: { datasets: speedupDatasets },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' as const },
+                        title: { display: true, text: 'Speedup Ratio vs. Median Performance', font: { size: 18 } },
+                        tooltip: { callbacks: { title: (items: any[]) => `Array Size: ${items[0].raw.x.toLocaleString()}`, label: (item: any) => `${item.dataset.label}: ${item.raw.y.toFixed(2)}x vs median` } },
+                        annotation: { annotations: { baseline: { type: 'line' as const, yMin: 1.0, yMax: 1.0, borderColor: 'rgba(128, 128, 128, 0.7)', borderWidth: 2, borderDash: [6, 6], label: { content: 'Median Performance (1.0x)', enabled: true, position: 'end' as const, backgroundColor: 'rgba(255, 255, 255, 0.6)', color: 'rgba(100, 100, 100, 1)' } } } }
+                    },
+                    scales: {
+                        x: { type: 'logarithmic' as const, title: { display: true, text: 'Array Size (Logarithmic Scale)' } },
+                        y: { type: 'logarithmic' as const, title: { display: true, text: 'Speedup Ratio (Logarithmic Scale)' }, ticks: { callback: (val: any) => val.toString() + 'x' } }
+                    }
+                }
+            };
+
+            allCharts.push({
+                chartId: `speedup-chart-${scenarioIndex}`,
+                chartConfig: JSON.stringify(speedupChartConfig).replace(/<\/script/g, '<\\/script'),
+                chartTitle: `Speedup Analysis: ${scenarioName}`
+            });
+
+            scenarioIndex++;
+        }
+
+        console.log('Generating HTML report...');
+        const htmlContent = this.generateHtml(allCharts);
+
+        this.saveReport(htmlContent, outputPath);
+    }
+
+    private loadData(): PerformanceResult[] {
+        try {
+            const rawData = fs.readFileSync(this.inputPath, 'utf-8');
+            return JSON.parse(rawData) as PerformanceResult[];
+        } catch (error) {
+            console.error(`Error: Could not read or parse input file at ${this.inputPath}.`);
+            console.error('Please ensure `performance-tester.ts` has been run successfully first.');
+            process.exit(1);
+        }
+    }
+
+    private processData(): void {
+        for (const result of this.results) {
+            if (!this.processedData[result.scenarioName]) { this.processedData[result.scenarioName] = {}; }
+            const scenario = this.processedData[result.scenarioName];
+            if (!scenario[result.algorithmName]) { scenario[result.algorithmName] = []; }
+            scenario[result.algorithmName].push({ x: result.arraySize, y: result.executionTime });
+        }
+        for (const scenario of Object.values(this.processedData)) {
+            for (const algorithmData of Object.values(scenario)) {
+                algorithmData.sort((a, b) => a.x - b.x);
+            }
+        }
+    }
+
+    private generateHtml(chartConfigs: ChartConfigInfo[]): string {
+        const chartDivs = chartConfigs.map(c => `<div class="chart-container"><h2>${c.chartTitle}</h2><canvas id="${c.chartId}"></canvas></div>`).join('\n');
+        const chartScripts = chartConfigs.map(c => `new Chart(document.getElementById('${c.chartId}'), ${c.chartConfig});`).join('\n');
+
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorting Algorithm Benchmark Results</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f8f9fa; color: #343a40; }
+        h1 { text-align: center; color: #212529; margin-bottom: 30px; }
+        h2 { text-align: center; color: #495057; margin-top: 50px; border-top: 1px solid #dee2e6; padding-top: 40px; }
+        .chart-container { width: 90%; max-width: 1200px; margin: 20px auto; padding: 20px; background-color: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <h1>Sorting Algorithm Benchmark Analysis</h1>
+    ${chartDivs}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if(window.ChartAnnotation) { Chart.register(window.ChartAnnotation); }
+            ${chartScripts}
+        });
+    </script>
+</body>
+</html>`;
+    }
+
+    private saveReport(htmlContent: string, outputPath: string): void {
+        try {
+            const outputDir = path.dirname(outputPath);
+            if (!fs.existsSync(outputDir)) { fs.mkdirSync(outputDir, { recursive: true }); }
+            fs.writeFileSync(outputPath, htmlContent);
+            console.log(`Report successfully generated! Open this file in your browser:\n${path.resolve(outputPath)}`);
+        } catch (error) {
+            console.error(`Error: Could not write the report to ${outputPath}.`, error);
+            process.exit(1);
+        }
+    }
+}
+
+function main() {
+    const reportsDir = path.join(__dirname, '../../reports');
+    const inputPath = path.join(reportsDir, 'performance-results.json');
+    const outputPath = path.join(reportsDir, 'benchmark_plot.html');
+
+    const generator = new PlotGenerator(inputPath);
+    generator.generateReport(outputPath);
+}
+
+main();
+
+--- src\benchmarking\benchmark-runner.ts ---
+
+/**
+ * @file benchmark-runner.ts
+ * @description
+ * This file implements the `BenchmarkRunner` class, which orchestrates the
+ * performance testing of various sorting algorithms across different data scenarios and array sizes.
+ * It manages the execution flow, logs progress, collects performance metrics,
+ * and handles early termination of tests based on defined thresholds.
+ */
+
+import { performance } from 'perf_hooks';
+import { ALGORITHMS_TO_TEST, Algorithm } from '../config/algorithms.config';
+import { PERFORMANCE_TEST_SIZES } from '../config/performance-test.config';
+import { getCompatibleScenariosFor } from '../config/scenario-helper';
+import { BenchmarkSettings } from './benchmark.config';
+import { LoggerService } from './services/logger.service';
+import { ResultManager } from './services/result-manager.service';
+import { TestDataGenerator } from './services/test-data-generator.service';
+import { MasterTestData } from './types';
+
+/**
+ * Orchestrates the execution of performance benchmarks for sorting algorithms.
+ * It runs algorithms against various data scenarios and array sizes,
+ * measures their performance, and manages the collection and reporting of results.
+ */
+export class BenchmarkRunner {
+    // Start time of the benchmark suite.
+    private totalStartTime: number = 0;
+    // Stores previous results to detect performance changes.
+    private readonly previousResults = new Map<string, { size: number; time: number }>();
+    // Tracks scenarios abandoned due to performance.
+    private readonly abandonedScenarios = new Set<string>();
+
+    /**
+     * Initializes the BenchmarkRunner with necessary services.
+     * @param logger - Service for logging benchmark progress and results.
+     * @param testDataGenerator - Service for generating test data arrays.
+     * @param resultManager - Service for managing and saving benchmark results.
+     */
+    constructor(
+        private readonly logger: LoggerService,
+        private readonly testDataGenerator: TestDataGenerator,
+        private readonly resultManager: ResultManager
+    ) {}
+
+    /**
+     * Starts the benchmark suite, generates data, runs tests, and saves results.
+     */
+    public async run(): Promise<void> {
+        this.logger.header('Starting Performance Benchmark Suite');
+        this.totalStartTime = performance.now();
+
+        // Generate all test data.
+        const testData = this.testDataGenerator.generateAll();
+
+        // Test each algorithm.
+        for (const algorithm of ALGORITHMS_TO_TEST) {
+            this.runTestsForAlgorithm(algorithm, testData);
+        }
+
+        // Save results.
+        this.resultManager.save();
+        // Log total duration.
+        this.logFooter();
+    }
+    
+    /**
+     * Tests an algorithm across scenarios and sizes.
+     * @param algorithm - Algorithm to test.
+     * @param testData - Pre-generated test data.
+     */
+    private runTestsForAlgorithm(algorithm: Algorithm, testData: MasterTestData): void {
+        this.logger.log(`\n--- Testing Algorithm: "${algorithm.name}" ---`);
+        // Get compatible scenarios.
+        const compatibleScenarios = getCompatibleScenariosFor(algorithm);
+
+        // For each compatible scenario:
+        for (const scenario of compatibleScenarios) {
+            this.logger.log(`  - Scenario: "${scenario.name}"`);
+            // Create a unique scenario key.
+            const scenarioKey = `${algorithm.name}|${scenario.name}`;
+            // Get scenario-specific test data.
+            const scenarioData = testData.get(scenario.name);
+
+            // Skip if no data.
+            if (!scenarioData) continue;
+
+            // For each array size:
+            for (const size of PERFORMANCE_TEST_SIZES) {
+                // Skip size 0.
+                if (size === 0) continue;
+                // Break if scenario abandoned.
+                if (this.abandonedScenarios.has(scenarioKey)) break;
+
+                // Get test arrays for size and scenario.
+                const testArrays = scenarioData.get(size);
+                // Skip if no test arrays.
+                if (!testArrays) continue;
+
+                // Measure algorithm performance.
+                const { averageTime, totalSampleTime } = this.measurePerformance(algorithm, testArrays);
+                
+                // Log performance results.
+                this.logger.log(`    - Size: ${size.toLocaleString().padEnd(8)}: ${averageTime.toFixed(4)} ms (avg of ${testArrays.length} runs in ${totalSampleTime.toFixed(2)} ms)`);
+                
+                // Add result to manager.
+                this.resultManager.add({ algorithmName: algorithm.name, scenarioName: scenario.name, arraySize: size, executionTime: averageTime });
+                // Check if scenario should be abandoned.
+                this.checkForBailOut(averageTime, size, scenarioKey);
+                // Store current result.
+                this.previousResults.set(scenarioKey, { size, time: averageTime });
+            }
+        }
+    }
+
+    /**
+     * Measures algorithm execution time.
+     * @param algorithm - Algorithm to measure.
+     * @param testArrays - Arrays to sort.
+     * @returns Average and total sample time.
+     */
+    private measurePerformance(algorithm: Algorithm, testArrays: number[][]) {
+        const sampleTimes: number[] = [];
+        // Run algorithm for each array and record time.
+        for (const array of testArrays) {
+            const start = performance.now();
+            // Run algorithm on array copy.
+            algorithm.fn([...array]);
+            const end = performance.now();
+            sampleTimes.push(end - start);
+        }
+        // Calculate total sample time.
+        const totalSampleTime = sampleTimes.reduce((sum, time) => sum + time, 0);
+        // Calculate average time.
+        const averageTime = sampleTimes.length > 0 ? totalSampleTime / sampleTimes.length : 0;
+        return { averageTime, totalSampleTime };
+    }
+
+    /**
+     * Checks if a scenario should be abandoned due to time or quadratic behavior.
+     * @param averageTime - Current average time.
+     * @param size - Current array size.
+     * @param scenarioKey - Algorithm-scenario key.
+     */
+    private checkForBailOut(averageTime: number, size: number, scenarioKey: string): void {
+        // Abandon scenario if time exceeds max.
+        if (averageTime > BenchmarkSettings.MAX_EXECUTION_TIME_MS) {
+            this.logger.warn(`      ↳ TIME CAP REACHED for ${scenarioKey}. Abandoning scenario.`);
+            this.abandonedScenarios.add(scenarioKey);
+            return;
+        }
+
+        // Get previous result for degradation check.
+        const prevResult = this.previousResults.get(scenarioKey);
+        // Check for quadratic behavior if previous result exists and time is significant.
+        if (prevResult && averageTime > BenchmarkSettings.MIN_TIME_FOR_DETECTION_MS) {
+            const sizeRatio = size / prevResult.size;
+            const timeRatio = averageTime / prevResult.time;
+            // If size and time increased, calculate degradation.
+            if (sizeRatio > 1 && timeRatio > 1) {
+                const degradationRatio = timeRatio / sizeRatio;
+                // If degradation exceeds threshold, abandon.
+                if (degradationRatio > BenchmarkSettings.QUADRATIC_BEHAVIOR_THRESHOLD) {
+                    this.logger.warn(`      ↳ DETECTED QUADRATIC BEHAVIOR for ${scenarioKey}. Abandoning scenario.`);
+                    this.abandonedScenarios.add(scenarioKey);
+                }
+            }
+        }
+    }
+
+    /**
+     * Logs benchmark suite completion and total duration.
+     */
+    private logFooter(): void {
+        const totalDuration = (performance.now() - this.totalStartTime) / 1000;
+        this.logger.header('Benchmark Suite Complete');
+        this.logger.log(`Total execution time: ${totalDuration.toFixed(2)} seconds.`);
+    }
+}
+
+--- src\benchmarking\benchmark.config.ts ---
+
+/**
+ * @file benchmark.config.ts
+ * @description
+ * This file defines configuration settings for the performance benchmarking suite.
+ * It includes thresholds for execution time, parameters for detecting quadratic behavior,
+ * and rules for determining the sample size for each test run based on array size.
+ * It also specifies the output directory and filename for benchmark results.
+ */
+
+/**
+ * Defines various settings and thresholds used throughout the benchmarking process.
+ */
+export const BenchmarkSettings = {
+    /** Max execution time for a single test (ms). Exceeding this abandons the scenario. */
+    MAX_EXECUTION_TIME_MS: 60,
+
+    /** Threshold for detecting quadratic (O(n^2)) behavior. */
+    QUADRATIC_BEHAVIOR_THRESHOLD: 500,
+
+    /** Minimum execution time (ms) for quadratic behavior detection to be active. */
+    MIN_TIME_FOR_DETECTION_MS: 10,
+
+    /**
+     * Determines the number of samples (test arrays) for a given array size.
+     * Balances thoroughness with benchmark duration.
+     * @param size - The array size.
+     * @returns Number of samples to use.
+     */
+    getSampleSize: (size: number): number => {
+        if (size < 50) return 200;
+        if (size < 500) return 100;
+        if (size < 1000) return 50;
+        if (size < 2000) return 40;
+        if (size < 3000) return 30;
+        if (size < 6000) return 20;
+        if (size < 10000) return 10;
+        return 5;
+    },
+
+    /** Directory for saving benchmark reports. */
+    REPORTS_DIR: './reports',
+    /** Filename for detailed performance results (JSON). */
+    RESULTS_FILENAME: 'performance-results.json',
+};
+
+--- src\benchmarking\services\logger.service.ts ---
+
+/**
+ * @file logger.service.ts
+ * @description
+ * This file provides the `LoggerService` class, a utility for consistent
+ * console logging across the benchmarking suite. It offers methods for
+ * logging general messages, informational messages, warnings, errors,
+ * and formatted headers to improve readability of benchmark output.
+ */
+
+/**
+ * A service for logging messages to the console with different levels of severity
+ * and formatting.
+ */
+export class LoggerService {
+    /**
+     * Logs a general message to the console.
+     * @param message - The message string to log.
+     */
+    public log(message: string): void {
+        console.log(message);
+    }
+
+    /**
+     * Logs an informational message to the console.
+     * @param message - The informational message string to log.
+     */
+    public info(message: string): void {
+        console.info(message);
+    }
+
+    /**
+     * Logs a warning message to the console.
+     * @param message - The warning message string to log.
+     */
+    public warn(message: string): void {
+        console.warn(message);
+    }
+    
+    /**
+     * Logs an error message to the console, optionally including an error object.
+     * @param message - The error message string to log.
+     * @param error - (Optional) The error object to log alongside the message.
+     */
+    public error(message: string, error?: unknown): void {
+        console.error(message, error || '');
+    }
+
+    /**
+     * Logs a formatted header to the console, typically used to demarcate sections
+     * in the benchmark output.
+     * @param title - The title for the header.
+     */
+    public header(title: string): void {
+        this.log(`\n================================================`);
+        this.log(title.toUpperCase());
+        this.log(`================================================`);
+    }
+}
+
+--- src\benchmarking\services\result-manager.service.ts ---
+
+/**
+ * @file result-manager.service.ts
+ * @description
+ * This file provides the `ResultManager` class, responsible for collecting,
+ * storing, and saving the performance benchmark results to a file.
+ * It ensures that results are persisted in a structured format (JSON)
+ * for later analysis and reporting.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { PerformanceResult } from '../types';
+import { BenchmarkSettings } from '../benchmark.config';
+import { LoggerService } from './logger.service';
+
+/**
+ * Manages the collection and persistence of performance benchmark results.
+ */
+export class ResultManager {
+    // An array to store all collected performance results.
+    private readonly results: PerformanceResult[] = [];
+
+    /**
+     * Initializes the ResultManager with a logger service.
+     * @param logger - Service for logging messages, including success or failure of saving results.
+     */
+    constructor(private readonly logger: LoggerService) {}
+
+    /**
+     * Adds a single performance result to the collection.
+     * @param result - The `PerformanceResult` object to add.
+     */
+    public add(result: PerformanceResult): void {
+        this.results.push(result);
+    }
+
+    /**
+     * Saves all collected performance results to a JSON file.
+     * It creates the reports directory if it doesn't exist and handles file writing errors.
+     */
+    public save(): void {
+        const { REPORTS_DIR, RESULTS_FILENAME } = BenchmarkSettings;
+        // Ensure the reports directory exists, create it recursively if not.
+        if (!fs.existsSync(REPORTS_DIR)) {
+            fs.mkdirSync(REPORTS_DIR, { recursive: true });
+        }
+        
+        // Construct the full output path for the results file.
+        const outputPath = path.join(REPORTS_DIR, RESULTS_FILENAME);
+        
+        try {
+            // Write the results array to the file as pretty-printed JSON.
+            fs.writeFileSync(outputPath, JSON.stringify(this.results, null, 2));
+            this.logger.info(`\nResults successfully saved to: ${path.resolve(outputPath)}`);
+        } catch (error) {
+            // Log an error if saving fails.
+            this.logger.error(`Failed to save results to file: ${outputPath}`, error);
+        }
+    }
+}
+
+--- src\benchmarking\services\test-data-generator.service.ts ---
+
+/**
+ * @file test-data-generator.service.ts
+ * @description
+ * This file provides the `TestDataGenerator` class, which is responsible for
+ * pre-generating all the necessary test data (arrays) for the performance
+ * benchmarking suite. It creates various array types (scenarios) and sizes
+ * based on the configured settings, ensuring that each algorithm is tested
+ * against a consistent and diverse set of inputs.
+ */
+
+import { ALGORITHMS_TO_TEST } from '../../config/algorithms.config';
+import { TestScenario } from '../../config/test-scenarios.config';
+import { PERFORMANCE_TEST_SIZES } from '../../config/performance-test.config';
+import { getCompatibleScenariosFor } from '../../config/scenario-helper';
+import { BenchmarkSettings } from '../benchmark.config';
+import { LoggerService } from './logger.service';
+import { MasterTestData } from '../types';
+
+/**
+ * A service responsible for generating all test data required for benchmarking.
+ * It creates arrays for various scenarios and sizes to ensure comprehensive testing.
+ */
+export class TestDataGenerator {
+    /**
+     * Initializes the TestDataGenerator with a logger service.
+     * @param logger - Service for logging progress during data generation.
+     */
+    constructor(private readonly logger: LoggerService) {}
+
+    /**
+     * Generates a comprehensive set of test data for all compatible scenarios and array sizes.
+     * The data is structured as a `MasterTestData` map for easy access during benchmarking.
+     * @returns A `MasterTestData` object containing all pre-generated test arrays.
+     */
+    public generateAll(): MasterTestData {
+        this.logger.info('--- Pre-generating all test data... ---');
+
+        // Initialize the master map to store all generated test data.
+        const masterTestData: MasterTestData = new Map();
+        // Get a unique list of all scenarios that will be tested across all algorithms.
+        const allScenarios = this.getAllUniqueScenarios();
+
+        // Iterate through each unique test scenario.
+        for (const scenario of allScenarios) {
+            // Create a map to hold test arrays for different sizes within the current scenario.
+            const scenarioData = new Map<number, number[][]>();
+            // Iterate through each defined array size for performance testing.
+            for (const size of PERFORMANCE_TEST_SIZES) {
+                // Skip size 0 as it's not a valid test size.
+                if (size === 0) continue;
+                // Determine the number of samples (arrays) to generate for the current size.
+                const sampleSize = BenchmarkSettings.getSampleSize(size);
+                const testArrays: number[][] = [];
+                // Generate the specified number of test arrays using the scenario's generator function.
+                for (let i = 0; i < sampleSize; i++) {
+                    testArrays.push(scenario.generator(size));
+                }
+                // Store the generated test arrays for the current size.
+                scenarioData.set(size, testArrays);
+            }
+            // Store the scenario's data (arrays for all sizes) in the master test data map.
+            masterTestData.set(scenario.name, scenarioData);
+        }
+
+        this.logger.info('--- Test data generation complete. ---');
+        return masterTestData;
+    }
+
+    /**
+     * Retrieves a unique list of all `TestScenario` objects that are compatible
+     * with any of the algorithms configured for testing.
+     * This ensures that data is only generated for relevant scenarios.
+     * @returns An array of unique `TestScenario` objects.
+     */
+    private getAllUniqueScenarios(): TestScenario[] {
+        // Flatten all compatible scenarios from all algorithms into a single array,
+        // then reduce them into a Map to ensure uniqueness by scenario name.
+        const scenariosMap = ALGORITHMS_TO_TEST
+            .flatMap(getCompatibleScenariosFor)
+            .reduce((map, scenario) => map.set(scenario.name, scenario), new Map<string, TestScenario>());
+        // Convert the Map values back to an array of unique TestScenario objects.
+        return Array.from(scenariosMap.values());
+    }
+}
+
+--- src\benchmarking\types.ts ---
+
+/**
+ * @file types.ts
+ * @description
+ * This file defines TypeScript interfaces and types used across the benchmarking module.
+ * It includes the structure for storing individual performance test results and
+ * the complex type for the master test data generated for all scenarios and array sizes.
+ */
+
+/**
+ * Represents a single performance test result.
+ */
+export interface PerformanceResult {
+    /** Algorithm name. */
+    algorithmName: string;
+    /** Data scenario name. */
+    scenarioName: string;
+    /** Array size. */
+    arraySize: number;
+    /** Execution time in milliseconds. */
+    executionTime: number;
+}
+
+/**
+ * Comprehensive collection of all test data.
+ * Map: scenario name (string) -> Map: array size (number) -> number[][] (test instances).
+ */
+export type MasterTestData = Map<string, Map<number, number[][]>>;
+
+--- src\config\algorithms.config.ts ---
+
+/**
+ * @file algorithms.config.ts
+ * @description
+ * This file defines the configuration for the sorting algorithms to be tested.
+ * It includes the `Algorithm` interface and a list of all algorithms available for benchmarking.
+ */
+
+import * as algorithms from '../algorithms';
+
+/**
+ * Defines the signature for a sorting function.
+ */
+export type SortingFunction = (arr: number[]) => number[];
+
+/**
+ * Specifies the type of data an algorithm can accept.
+ */
+export type AcceptedData = 'integers' | 'all';
+
+/**
+ * Represents a single sorting algorithm with its name, function, and accepted data types.
+ */
+export interface Algorithm {
+    name: string;
+    fn: SortingFunction;
+    accepts?: AcceptedData; // Optional: specifies if the algorithm only accepts integers
+}
+
+/**
+ * The master list of sorting algorithms to be included in performance tests.
+ * Each entry includes the algorithm's display name and its corresponding function.
+ */
+export const ALGORITHMS_TO_TEST: Algorithm[] = [
+  { name: 'Bubble Sort',       fn: algorithms.bubbleSort},
+  { name: 'Bubble Sort Smart', fn: algorithms.bubbleSortSmart},
+  { name: 'Insertion Sort',    fn: algorithms.insertionSort},
+  { name: 'Selection Sort',    fn: algorithms.selectionSort},
+  
+  { name: 'Merge Sort',        fn: algorithms.mergeSort },
+  { name: 'Quick Sort',        fn: algorithms.quickSort },
+  { name: 'Heap Sort',         fn: algorithms.heapSort },
+  { name: 'Shell Sort',        fn: algorithms.shellSort },
+
+  // Algorithms specifically designed for integer data
+  { name: 'Counting Sort',     fn: algorithms.countingSort,     accepts: 'integers' },
+  { name: 'Radix Sort',        fn: algorithms.radixSort,        accepts: 'integers' },
+  { name: 'Bitwise Radix Sort',fn: algorithms.bitwiseRadixSort, accepts: 'integers' },
+
+  // Native JavaScript sort for comparison
+  { name: 'Timsort (Native)', fn: (arr) => [...arr].sort((a,b) => a-b) },
+  { name: 'Bucket Sort',      fn: algorithms.bucketSort },
+];
+
+--- src\config\performance-test.config.ts ---
+
+/**
+ * @file performance-test.config.ts
+ * @description
+ * This file configures the parameters for performance testing of sorting algorithms.
+ * It defines static test array sizes and parameters for dynamically generating
+ * incremental test sizes, along with the number of samples to run per size.
+ */
+
+/**
+ * Configuration object for performance tests.
+ */
+export const performanceTestConfig = {
+    /**
+     * An array of specific, fixed sizes for test arrays.
+     */
+    staticTestSizes: [
+        100_000
+    ],
+
+    /**
+     * Parameters for generating a range of test sizes dynamically.
+     */
+    dynamicTestParameters: {
+        enabled: true, // Whether to use dynamic test sizes
+        startingSize: 5, // The smallest array size to test
+        maxSize: 30_000, // The largest array size to test
+        growthFactor: 1.1 // Factor by which array size increases in each step
+    },
+
+    /**
+     * The number of times each algorithm will be run for a given array size.
+     */
+    samplesPerSize: 5,
+};
+
+/**
+ * Generates an array of incrementally growing test sizes based on provided parameters.
+ * @param params - Object containing startingSize, maxSize, and growthFactor.
+ * @returns An array of numbers representing the test sizes.
+ */
+function generateIncrementalTestSizes(params: { startingSize: number, maxSize: number, growthFactor: number }): number[] {
+    const sizes: number[] = [];
+    let current = params.startingSize;
+    while (current <= params.maxSize) {
+        sizes.push(Math.floor(current));
+        current *= params.growthFactor;
+    }
+    return sizes;
+}
+
+// Combine static and dynamically generated sizes, ensuring uniqueness.
+const combinedSizes = new Set<number>(performanceTestConfig.staticTestSizes);
+
+// If dynamic test parameters are enabled, generate and add them to the set.
+if (performanceTestConfig.dynamicTestParameters.enabled) {
+    const dynamicSizes = generateIncrementalTestSizes(performanceTestConfig.dynamicTestParameters);
+    
+    dynamicSizes.forEach(size => combinedSizes.add(size));
+}
+
+// Convert the set back to an array and sort it for consistent testing order.
+const finalSizes = Array.from(combinedSizes).sort((a, b) => a - b);
+
+/**
+ * The final, sorted array of all test sizes to be used in performance benchmarks.
+ */
+export const PERFORMANCE_TEST_SIZES = finalSizes;
+
+--- src\config\scenario-helper.ts ---
+
+/**
+ * @file scenario-helper.ts
+ * @description
+ * This file provides utility functions for filtering test scenarios based on algorithm compatibility.
+ * It ensures that algorithms are only tested with data types they are designed to handle.
+ */
+
+import { Algorithm } from './algorithms.config';
+import { TestScenario, scenariosToTest } from './test-scenarios.config';
+
+/**
+ * Filters the list of all available test scenarios to return only those compatible with a given algorithm.
+ * For example, integer-only algorithms will only be tested with integer data scenarios.
+ * @param algorithm - The algorithm for which to find compatible scenarios.
+ * @returns An array of `TestScenario` objects compatible with the provided algorithm.
+ */
+export function getCompatibleScenariosFor(algorithm: Algorithm): TestScenario[] {
+    let scenarios = scenariosToTest;
+
+    // If the algorithm specifically accepts only integers, filter scenarios to match.
+    if (algorithm.accepts === 'integers') {
+        scenarios = scenarios.filter(scenario => scenario.dataType === 'integer');
+    }
+
+    return scenarios;
+}
+
+--- src\config\test-scenarios.config.ts ---
+
+/**
+ * @file test-scenarios.config.ts
+ * @description
+ * This file defines the complete set of data conditions, or "scenarios,"
+ * used to test the sorting algorithms. Each scenario specifies a particular type of array
+ * (e.g., random, sorted, reversed, float-based, etc.) that presents a unique
+ * challenge or highlights a specific performance characteristic of an algorithm.
+ */
+
+import { generateRandomArray, generateSortedArray, generateNearlySortedArray } from "../data/testArrayGenerator";
+
+/**
+ * The underlying type structure for each "Scenario Generator".
+ * This defines a simple function that the test runner can call with just the array size.
+ */
+export type ScenarioGenerator = (size: number) => number[];
+
+/**
+ * The structure for each test scenario configuration.
+ */
+export interface TestScenario {
+    name: string; // A descriptive name for test reports and charts.
+    generator: ScenarioGenerator; // The function that creates the array for the scenario.
+    dataType: 'integer' | 'float'; // The type of data in the array (integer or float).
+}
+
+/**
+ * The master list of test scenarios that your runners will import and loop through.
+ */
+export const scenariosToTest: TestScenario[] = [
+    // Scenarios using generateRandomArray
+    {
+        name: 'on a random array of integers',
+        // We use an arrow function to "wrap" the original generator,
+        // providing the specific arguments we want for this test case.
+        generator: (size) => generateRandomArray(size, size * Math.floor(Math.random() * 10) + 1, 'integer'),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a random array of floats',
+        generator: (size) => generateRandomArray(size, size * Math.floor(Math.random() * 10) + 1, 'float'),
+        dataType: 'float',
+    },
+    {
+        name: 'on a random integer array with many duplicates',
+        // By setting a low max magnitude, we ensure many numbers will be repeated.
+        generator: (size) => generateRandomArray(size, Math.floor(size / 10), 'integer'),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a random integer array with a sparse distribution (large values)',
+        // Here, we make the max value HUGE compared to the array size.
+        // This is the worst-case for Counting Sort's memory and k-dependent loop.
+        generator: (size) => generateRandomArray(size, size * 100, 'integer'),
+        dataType: 'integer',
+    },
+
+    // Scenarios using generateSortedArray
+    {
+        name: 'on a perfectly sorted ascending array',
+        generator: (size) => generateSortedArray(size, 'integer', false),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a perfectly sorted descending (reversed) array',
+        // This is a classic "worst-case" scenario for many sorting algorithms like basic QuickSort.
+        generator: (size) => generateSortedArray(size, 'integer', true),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a perfectly sorted array of floats',
+        generator: (size) => generateSortedArray(size, 'float', false),
+        dataType: 'float'
+    },
+
+    // Scenarios using generateNearlySortedArray
+    {
+        name: 'on a nearly sorted (5% chaos) ascending array',
+        // This often represents a "best-case" for algorithms like Insertion Sort.
+        generator: (size) => generateNearlySortedArray(size, 5, false, 'integer'),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a nearly sorted (5% chaos) descending array',
+        generator: (size) => generateNearlySortedArray(size, 5, true, 'integer'),
+        dataType: 'integer',
+    },
+    {
+        name: 'on a highly shuffled (40% chaos) array',
+        generator: (size) => generateNearlySortedArray(size, 40, false, 'integer'),
+        dataType: 'integer',
+    },
+    
+];
+
+
+--- src\data\testArrayGenerator.ts ---
+
+/**
+ * @file testArrayGenerator.ts
+ * @description
+ * This file is a utility library containing a set of "factory" functions for
+ * generating test arrays. Its sole responsibility is to produce arrays with
+ * specific characteristics (e.g., random, sorted, nearly sorted) on demand.
+ *
+ * These functions are self-contained and have no knowledge of the sorting algorithms
+ * or test runners. They are the foundational data source for all testing suites.
+ */
+
+/**
+ * Generates an array of random numbers, either integers or floating points.
+ * @param numElements The size of the array.
+ * @param maxElementMagnitude The max magnitude of any element in the random generated array.
+ * @param dataType Specifies whether to generate 'integer' or 'float' numbers.
+ * @returns An array of n random numbers.
+ */
+export function generateRandomArray(numElements: number, maxElementMagnitude: number = numElements * 2, dataType: 'integer' | 'float' = 'integer'): number[] {
+    if (dataType === 'integer') {
+        return Array.from({ length: numElements }, () => Math.floor(Math.random() * maxElementMagnitude));
+    } else {
+        return Array.from({ length: numElements }, () => Math.random() * maxElementMagnitude);
+    }
+}
+
+/**
+ * Generates an array of numbers that is perfectly sorted.
+ * @param numElements The size of the array.
+ * @param dataType Specifies whether to generate 'integer' or 'float' numbers.
+ * @param descending If true, generates the array in descending order. Defaults to false (ascending).
+ * @returns An array of n numbers sorted in the specified order.
+ */
+export function generateSortedArray(numElements: number, dataType: 'integer' | 'float' = 'integer', descending: boolean = false): number[] {
+    return Array.from({ length: numElements }, (_, i) => {
+        // Determine the base value (e.g., 0, 1, 2... or 9, 8, 7...)
+        const baseValue = descending ? numElements - 1 - i : i;
+
+        // Return an integer or a float based on the dataType
+        if (dataType === 'integer') {
+            return baseValue;
+        } else {
+            // For floats, add a random fraction to maintain order but prevent perfect uniformity
+            return baseValue + Math.random();
+        }
+    });
+}
+
+/**
+ * Generates an array of numbers that is almost sorted.
+ * @param numElements The size of the array.
+ * @param randomness How disorderly in % the array is. e.g., randomness = 5 -> 5% of elements are swapped.
+ * @param descending Whether the base array should be ascending or descending.
+ * @param dataType Specifies whether to generate 'integer' or 'float' numbers.
+ * @returns An array of n numbers that is mostly sorted.
+ */
+export function generateNearlySortedArray(numElements: number, randomness: number = 5, descending: boolean = false, dataType: 'integer' | 'float' = 'integer'): number[] {
+    const testArray = generateSortedArray(numElements, dataType, descending);
+
+    const swaps = Math.floor(numElements * (randomness / 100));
+    for (let i = 0; i < swaps; i++) {
+        const index1 = Math.floor(Math.random() * numElements);
+        const index2 = Math.floor(Math.random() * numElements);
+        
+        const temp = testArray[index1];
+        testArray[index1] = testArray[index2];
+        testArray[index2] = temp;
+    }
+    
+    return testArray;
+}
+
+--- src\runners\correctness.test.ts ---
+
+/**
+ * @file correctness.test.ts
+ * @description
+ * This file contains the test suite for verifying the correctness of sorting algorithms.
+ * It iterates through various algorithms and test scenarios, ensuring that each algorithm
+ * correctly sorts arrays of different sizes and types, and does not mutate the original input array.
+ */
+
+import { describe, it, expect } from '@jest/globals';
+import { ALGORITHMS_TO_TEST, Algorithm } from '../config/algorithms.config';
+import { TestScenario } from '../config/test-scenarios.config';
+import { getCompatibleScenariosFor } from '../config/scenario-helper';
+
+/**
+ * Defines a set of array sizes to be used for correctness testing.
+ * Includes edge cases like empty, single-element, and small arrays, as well as a larger size.
+ */
+const CORRECTNESS_TEST_SIZES = [0, 1, 2, 17, 100];
+
+/**
+ * Generates the expected sorted result for a given array using JavaScript's native sort.
+ * This serves as the ground truth for correctness assertions.
+ * @param arr - The input array to be sorted.
+ * @returns A new array containing the sorted elements.
+ */
+const getExpectedResult = (arr: number[]): number[] => [...arr].sort((a, b) => a - b);
+
+/**
+ * Main test suite for sorting algorithm correctness.
+ * It dynamically generates tests for each algorithm and compatible scenario.
+ */
+describe('Sorting Algorithm Correctness Suite', () => {
+
+    // Iterate over each algorithm defined in the configuration.
+    ALGORITHMS_TO_TEST.forEach((algorithm: Algorithm) => {
+        describe(`Algorithm: ${algorithm.name}`, () => {
+            
+            // Determine which test scenarios are compatible with the current algorithm.
+            const compatibleScenarios = getCompatibleScenariosFor(algorithm);
+
+            // For each compatible scenario, run a nested test suite.
+            compatibleScenarios.forEach((scenario: TestScenario) => {
+                describe(`Scenario: ${scenario.name}`, () => {
+                    
+                    // Run the same test for each defined correctness test size.
+                    it.each(
+                        CORRECTNESS_TEST_SIZES.map(size => [size])
+                    )('should correctly sort and not mutate an array of size %s', (size) => {
+                        // Arrange: Prepare the input data and expected output.
+                        const inputArray = scenario.generator(size); // Generate array based on scenario and size.
+                        const originalSnapshot = [...inputArray]; // Create a copy to check for mutation.
+                        const expectedOutput = getExpectedResult(inputArray); // Get the correctly sorted version.
+                        
+                        // Act: Execute the algorithm's sorting function.
+                        const actualOutput = algorithm.fn(inputArray);
+                        
+                        // Assert: Verify the results.
+                        expect(actualOutput).toEqual(expectedOutput); // Check if the output is correctly sorted.
+                        expect(inputArray).toEqual(originalSnapshot); // Check if the original array was not modified.
+                    });
+                });
+            });
+        });
+    });
+});
+
+--- src\runners\performance-tester.ts ---
+
+// src/runners/performance-tester.ts
+
+import { LoggerService } from '../benchmarking/services/logger.service';
+import { ResultManager } from '../benchmarking/services/result-manager.service';
+import { TestDataGenerator } from '../benchmarking/services/test-data-generator.service';
+import { BenchmarkRunner } from '../benchmarking/benchmark-runner';
+
+/**
+ * The main entry point for the performance benchmark.
+ * This file is the "Composition Root". It is responsible for:
+ * 1. Instantiating all the necessary services (dependencies).
+ * 2. Injecting those services into the main application class (`BenchmarkRunner`).
+ * 3. Kicking off the application logic.
+ */
+async function main() {
+    // 1. Instantiate services
+    const logger = new LoggerService();
+    const resultManager = new ResultManager(logger);
+    const testDataGenerator = new TestDataGenerator(logger);
+
+    // 2. Inject dependencies into the main runner
+    const runner = new BenchmarkRunner(
+        logger,
+        testDataGenerator,
+        resultManager
+    );
+
+    // 3. Run the application
+    try {
+        await runner.run();
+    } catch (error) {
+        logger.error('A fatal error occurred during the benchmark run:', error);
+        process.exit(1); // Exit with an error code
+    }
+}
+
+// Execute the main function
+main();
+
