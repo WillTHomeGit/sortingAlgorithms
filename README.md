@@ -8,7 +8,9 @@ or
     node dist/runners/performance-test.js
 
 
+
 the test !!! WILL TAKE A REALLY LONG TIME !!! >= 4 minutes on a slow computer. (~5 minutes for me)
+
 
 
 To speed up the program, 
