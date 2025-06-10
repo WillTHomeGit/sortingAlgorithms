@@ -28,8 +28,5 @@ export function getCompatibleScenariosFor(algorithm: Algorithm): TestScenario[] 
         scenarios = scenarios.filter(scenario => scenario.dataType === 'integer');
     }
 
-    // You could add more rules here in the future!
-    // e.g., if (algorithm.name === '...') { ... }
-
     return scenarios;
 }

@@ -13,30 +13,31 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// This is the data structure we expect from the JSON file.
+// Expected data structure from the JSON results file.
 interface PerformanceResult {
     algorithmName: string;
     scenarioName: string;
     arraySize: number;
-    executionTime: number; 
+    executionTime: number;
 }
 
-// This is the transformed structure, ideal for plotting.
+// Transformed data structure, optimized for chart plotting.
 type ProcessedData = {
     [scenarioName: string]: {
         [algorithmName: string]: { x: number; y: number }[];
     };
 };
 
-// A type for our chart configuration objects for better type safety.
+// Type for chart configuration objects.
 type ChartConfigInfo = { chartId: string; chartConfig: string; chartTitle: string };
 
 /**
- * Encapsulates the entire process of loading, processing, and plotting benchmark data.
+ * Manages loading, processing, and rendering benchmark data into an HTML report.
  */
 class PlotGenerator {
     private readonly results: PerformanceResult[];
     private processedData: ProcessedData = {};
+    // A palette of colors for chart lines/areas.
     private readonly COLORS = ['#36A2EB', '#FF6384', '#4BC0C0', '#FF9F40', '#9966FF', '#FFCE56', '#C9CBCF', '#E57373', '#7986CB', '#008080', '#FF2400', '#FBC02D', '#3F51B5'];
 
     constructor(private readonly inputPath: string) {
@@ -44,20 +45,21 @@ class PlotGenerator {
     }
 
     /**
-     * The main public method to generate the final HTML report with interleaved charts.
+     * Generates the final HTML report with interleaved charts.
      * @param outputPath The file path where the HTML report should be saved.
      */
     public generateReport(outputPath: string): void {
         console.log('Processing benchmark data...');
         this.processData();
-        
+
         console.log('Generating interleaved chart configurations...');
         const allCharts: ChartConfigInfo[] = [];
         let scenarioIndex = 0;
 
+        // Iterate through each test scenario (e.g., 'Random', 'Sorted', 'Reverse Sorted')
         for (const [scenarioName, algorithms] of Object.entries(this.processedData)) {
-            
-            // --- 1. Generate Performance Chart for the current scenario ---
+
+            // 1. Generate Raw Performance Chart for the current scenario.
             const perfDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => ({
                 label: algorithmName,
                 data: data,
@@ -85,22 +87,28 @@ class PlotGenerator {
 
             allCharts.push({
                 chartId: `perf-chart-${scenarioIndex}`,
-                chartConfig: JSON.stringify(perfChartConfig).replace(/<\/script/g, '<\\/script'),
+                chartConfig: JSON.stringify(perfChartConfig).replace(/<\/script/g, '<\\/script'), // Prevent script tag breaking
                 chartTitle: `Raw Performance: ${scenarioName}`
             });
 
-            // --- 2. Generate Speedup Ratio Chart for the same scenario ---
+            // 2. Generate Speedup Ratio Chart for the same scenario.
+            // First, calculate median performance for each array size.
             const sizes = [...new Set(Object.values(algorithms).flatMap(data => data.map(d => d.x)))].sort((a, b) => a - b);
             const medianData = new Map<number, number>();
 
             for (const size of sizes) {
-                const timesAtThisSize = Object.values(algorithms).map(data => data.find(d => d.x === size)?.y).filter((t): t is number => t !== undefined && t > 0);
+                const timesAtThisSize = Object.values(algorithms)
+                    .map(data => data.find(d => d.x === size)?.y)
+                    .filter((t): t is number => t !== undefined && t > 0);
                 if (timesAtThisSize.length === 0) continue;
+
                 timesAtThisSize.sort((a, b) => a - b);
                 const mid = Math.floor(timesAtThisSize.length / 2);
-                medianData.set(size, timesAtThisSize.length % 2 !== 0 ? timesAtThisSize[mid] : (timesAtThisSize[mid - 1] + timesAtThisSize[mid]) / 2);
+                const median = timesAtThisSize.length % 2 !== 0 ? timesAtThisSize[mid] : (timesAtThisSize[mid - 1] + timesAtThisSize[mid]) / 2;
+                medianData.set(size, median);
             }
 
+            // Create datasets showing speedup relative to the median.
             const speedupDatasets = Object.entries(algorithms).map(([algorithmName, data], algIndex) => {
                 const ratioData = data.map(point => ({ x: point.x, y: medianData.has(point.x) && point.y > 0 ? (medianData.get(point.x)! / point.y) : 0 }));
                 return {
@@ -138,41 +146,61 @@ class PlotGenerator {
 
             scenarioIndex++;
         }
-        
+
         console.log('Generating HTML report...');
         const htmlContent = this.generateHtml(allCharts);
-        
+
         this.saveReport(htmlContent, outputPath);
     }
-    
+
+    /**
+     * Loads raw performance data from the specified JSON file.
+     * Handles file reading and JSON parsing errors.
+     */
     private loadData(): PerformanceResult[] {
         try {
             const rawData = fs.readFileSync(this.inputPath, 'utf-8');
             return JSON.parse(rawData) as PerformanceResult[];
         } catch (error) {
-            console.error(`❌ Error: Could not read or parse input file at ${this.inputPath}.`);
+            console.error(`Error: Could not read or parse input file at ${this.inputPath}.`);
             console.error('Please ensure `performance-tester.ts` has been run successfully first.');
             process.exit(1);
         }
     }
-    
+
+    /**
+     * Transforms raw results into a nested structure suitable for plotting.
+     * Organizes data by scenario and algorithm, then sorts by array size.
+     */
     private processData(): void {
         for (const result of this.results) {
+            // Initialize nested objects if they don't exist
             if (!this.processedData[result.scenarioName]) { this.processedData[result.scenarioName] = {}; }
             const scenario = this.processedData[result.scenarioName];
             if (!scenario[result.algorithmName]) { scenario[result.algorithmName] = []; }
+            // Add data point {x: arraySize, y: executionTime}
             scenario[result.algorithmName].push({ x: result.arraySize, y: result.executionTime });
         }
+        // Sort data points by array size (x-value) for each algorithm within each scenario.
         for (const scenario of Object.values(this.processedData)) {
             for (const algorithmData of Object.values(scenario)) {
                 algorithmData.sort((a, b) => a.x - b.x);
             }
         }
     }
-    
+
+    /**
+     * Generates the full HTML content for the report.
+     * Includes Chart.js and annotation plugin imports, styling, and dynamic chart scripts.
+     * @param chartConfigs An array of chart configuration objects.
+     * @returns The complete HTML string.
+     */
     private generateHtml(chartConfigs: ChartConfigInfo[]): string {
+        // Create HTML div elements for each chart canvas.
         const chartDivs = chartConfigs.map(c => `<div class="chart-container"><h2>${c.chartTitle}</h2><canvas id="${c.chartId}"></canvas></div>`).join('\n');
+        // Create JavaScript code to initialize each Chart.js instance.
         const chartScripts = chartConfigs.map(c => `new Chart(document.getElementById('${c.chartId}'), ${c.chartConfig});`).join('\n');
+
         return `
 <!DOCTYPE html>
 <html lang="en">
@@ -194,6 +222,7 @@ class PlotGenerator {
     ${chartDivs}
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Register Chart.js annotation plugin if available.
             if(window.ChartAnnotation) { Chart.register(window.ChartAnnotation); }
             ${chartScripts}
         });
@@ -201,25 +230,36 @@ class PlotGenerator {
 </body>
 </html>`;
     }
-    
+
+    /**
+     * Saves the generated HTML content to the specified output file.
+     * Creates directories if they don't exist.
+     * @param htmlContent The HTML string to save.
+     * @param outputPath The file path for the output HTML report.
+     */
     private saveReport(htmlContent: string, outputPath: string): void {
         try {
             const outputDir = path.dirname(outputPath);
+            // Ensure the output directory exists.
             if (!fs.existsSync(outputDir)) { fs.mkdirSync(outputDir, { recursive: true }); }
             fs.writeFileSync(outputPath, htmlContent);
-            console.log(`\n📊 Report successfully generated! Open this file in your browser:\n${path.resolve(outputPath)}`);
+            console.log(`Report successfully generated! Open this file in your browser:\n${path.resolve(outputPath)}`);
         } catch (error) {
-            console.error(`❌ Error: Could not write the report to ${outputPath}.`, error);
+            console.error(`Error: Could not write the report to ${outputPath}.`, error);
             process.exit(1);
         }
     }
 }
 
+/**
+ * Main function to execute the plot generation.
+ * Sets up input and output paths and initiates the process.
+ */
 function main() {
     const reportsDir = path.join(__dirname, '../../reports');
     const inputPath = path.join(reportsDir, 'performance-results.json');
     const outputPath = path.join(reportsDir, 'benchmark_plot.html');
-    
+
     const generator = new PlotGenerator(inputPath);
     generator.generateReport(outputPath);
 }

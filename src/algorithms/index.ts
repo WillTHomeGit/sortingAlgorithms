@@ -13,4 +13,4 @@ export * from './heap-sort';
 export * from './shell-sort';
 export * from './bucket-sort';
 export * from './tim-sort';
-export * from './tim-sort1';
+

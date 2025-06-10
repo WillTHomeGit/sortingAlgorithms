@@ -1,13 +1,12 @@
 /**
  * @file performance-tester.ts
  * @description
- * This is the main executable script for running the performance benchmark suite.
- * It uses a BenchmarkRunner class to encapsulate the state and logic of the test run,
- * producing a `performance-results.json` file for analysis.
- * 
- * This runner includes two layers of dynamic protection:
- * 1. A hard time cap to prevent any single test from running too long.
- * 2. A dynamic trend detector to bail out of tests showing quadratic (O(n^2)) behavior.
+ * This is the main script for running the performance benchmark suite.
+ * It uses a `BenchmarkRunner` to manage the test run, generating a `performance-results.json` file.
+ *
+ * This runner includes two safety features:
+ * 1. A hard time limit for each test to prevent endless runs.
+ * 2. A dynamic detector to stop tests showing slow, quadratic (O(n^2)) behavior early.
  */
 
 import { performance } from 'perf_hooks';
@@ -17,24 +16,22 @@ import { ALGORITHMS_TO_TEST, Algorithm } from '../config/algorithms.config';
 import { PERFORMANCE_TEST_SIZES } from '../config/performance-test.config';
 import { TestScenario } from '../config/test-scenarios.config';
 import { getCompatibleScenariosFor } from '../config/scenario-helper';
+// Removed worker pool import as it's part of the parallel processing logic.
 
-
-// --- Refactoring 1: Consolidate Benchmark Configuration ---
-// Grouping all tuning parameters into a single object makes them easier to manage.
+// All tuning parameters for the benchmark consolidated here.
 const benchmarkConfig = {
-    /** The absolute maximum time (in ms) a single benchmark is allowed to run. */
-    MAX_EXECUTION_TIME_MS: 75,
-    
-    /** Factor used to detect quadratic growth. A value of 4 suggests that if size doubles, time quadruples. */
-    QUADRATIC_BEHAVIOR_THRESHOLD: 4,
-    
-    /** The minimum execution time (in ms) required before trend detection will activate. */
+    /** Max time (in ms) a single benchmark is allowed to run. */
+    MAX_EXECUTION_TIME_MS: 60,
+
+    /** When size doubles, if time increases by more than this factor, it's considered quadratic. */
+    QUADRATIC_BEHAVIOR_THRESHOLD: 500,
+
+    /** Minimum execution time (in ms) before trend detection kicks in. */
     MIN_TIME_FOR_DETECTION_MS: 10,
 
     /**
-     * Determines the number of samples to run based on the array size.
-     * @param size The size of the array being tested.
-     * @returns The number of samples to run.
+     * Determines how many times to run a test for a given array size.
+     * Smaller arrays run more samples for better accuracy.
      */
     getSampleSize: (size: number): number => {
         if (size < 50) return 100;
@@ -44,20 +41,30 @@ const benchmarkConfig = {
     }
 };
 
+// Interface for the structure of each result record.
 export interface PerformanceResult {
     algorithmName: string;
     scenarioName: string;
     arraySize: number;
-    executionTime: number; 
+    executionTime: number;
 }
 
+/**
+ * Manages the entire benchmark process: running tests, logging, and saving results.
+ */
 class BenchmarkRunner {
     private readonly results: PerformanceResult[] = [];
     private totalStartTime: number = 0;
+    // Stores the last measured time for a given algorithm/scenario to detect trends.
     private readonly previousResults: Map<string, { size: number; time: number }> = new Map();
+    // Tracks scenarios that have been abandoned due to performance issues.
     private readonly abandonedScenarios: Set<string> = new Set();
 
-    public async run(): Promise<void> {
+    /**
+     * Kicks off the benchmark suite.
+     * This is now a standard synchronous function.
+     */
+    public run(): void {
         this.logHeader();
         this.totalStartTime = performance.now();
 
@@ -67,8 +74,12 @@ class BenchmarkRunner {
 
         this.logFooter();
         this.saveResults();
+        // No worker pool to destroy in a synchronous setup.
     }
 
+    /**
+     * Runs all relevant test scenarios for a given algorithm.
+     */
     private runTestsForAlgorithm(algorithm: Algorithm): void {
         console.log(`\n--- Testing Algorithm: "${algorithm.name}" ---`);
         const compatibleScenarios = getCompatibleScenariosFor(algorithm);
@@ -77,45 +88,51 @@ class BenchmarkRunner {
         }
     }
 
+    /**
+     * Runs tests for all specified array sizes within a given algorithm and scenario.
+     */
     private runTestForScenario(algorithm: Algorithm, scenario: TestScenario): void {
         const scenarioKey = `${algorithm.name}|${scenario.name}`;
         console.log(`  - Scenario: "${scenario.name}"`);
-        
+
         for (const size of PERFORMANCE_TEST_SIZES) {
+            // Skip size 0 and bail out if this scenario was previously abandoned.
             if (size === 0) continue;
             if (this.abandonedScenarios.has(scenarioKey)) break;
 
-            // --- Refactoring 2: Extract the measurement logic ---
-            // The main loop is now cleaner, focusing on orchestrating the test, not the details of it.
+            // Measure how long the algorithm takes for this size.
             const { averageTime, totalSampleTime, sampleSize } = this.measurePerformance(algorithm, scenario, size);
-            
+
             console.log(`    - Size: ${size.toLocaleString().padEnd(8)}: ${averageTime.toFixed(4)} ms (avg of ${sampleSize} runs in ${totalSampleTime.toFixed(2)} ms)`);
-            
+
+            // Store the result.
             this.results.push({ algorithmName: algorithm.name, scenarioName: scenario.name, arraySize: size, executionTime: averageTime });
 
-            // --- Refactoring 3: Encapsulate the bail-out logic ---
-            // The decision to abandon a scenario is now its own clear, single-responsibility function.
+            // Check if we should stop testing this scenario early.
             this.checkForBailOut(averageTime, size, scenarioKey);
-            
+
+            // Record this result for the next trend detection check.
             this.previousResults.set(scenarioKey, { size, time: averageTime });
         }
     }
 
     /**
-     * Executes the benchmark for a single algorithm/scenario/size combination and returns the timing results.
+     * Executes the algorithm multiple times for a specific configuration
+     * and calculates the average execution time.
      */
     private measurePerformance(algorithm: Algorithm, scenario: TestScenario, size: number) {
         const sampleSize = benchmarkConfig.getSampleSize(size);
-        const masterArray = scenario.generator(size);
+        const masterArray = scenario.generator(size); // Generate the array once.
         const sampleTimes: number[] = [];
 
         for (let i = 0; i < sampleSize; i++) {
             const start = performance.now();
+            // No 'await' needed as all algorithm functions are now synchronous.
             algorithm.fn([...masterArray]);
             const end = performance.now();
             sampleTimes.push(end - start);
         }
-        
+
         const totalSampleTime = sampleTimes.reduce((sum, time) => sum + time, 0);
         const averageTime = totalSampleTime / sampleTimes.length;
 
@@ -123,54 +140,61 @@ class BenchmarkRunner {
     }
 
     /**
-     * Checks if a scenario should be abandoned based on execution time or performance trend.
+     * Determines if a scenario should be abandoned due to excessive time or poor scaling.
      */
     private checkForBailOut(averageTime: number, size: number, scenarioKey: string): void {
-        // Layer 1: The Hard Cap Safety Net.
+        // First safety net: Hard time cap.
         if (averageTime > benchmarkConfig.MAX_EXECUTION_TIME_MS) {
-            console.log(`      ↳ ❗ TIME CAP REACHED. Execution exceeded ${benchmarkConfig.MAX_EXECUTION_TIME_MS}ms. Abandoning scenario.`);
+            console.log(`      ↳ TIME CAP REACHED. Execution exceeded ${benchmarkConfig.MAX_EXECUTION_TIME_MS}ms. Abandoning scenario.`);
             this.abandonedScenarios.add(scenarioKey);
-            return; // Exit early if the cap is reached
+            return;
         }
 
-        // Layer 2: The Trend Detector.
+        // Second safety net: Quadratic behavior detection.
         const prevResult = this.previousResults.get(scenarioKey);
+        // Only check if we have a previous result and the current time is significant enough.
         if (prevResult && averageTime > benchmarkConfig.MIN_TIME_FOR_DETECTION_MS) {
             const sizeRatio = size / prevResult.size;
             const timeRatio = averageTime / prevResult.time;
 
+            // If array size increased and time increased...
             if (sizeRatio > 1 && timeRatio > 1) {
+                // Calculate how much worse performance got relative to size increase.
                 const degradationRatio = timeRatio / sizeRatio;
                 if (degradationRatio > benchmarkConfig.QUADRATIC_BEHAVIOR_THRESHOLD) {
-                    console.log(`      ↳ ❗ DETECTED QUADRATIC BEHAVIOR. Abandoning scenario.`);
+                    console.log(`      ↳ DETECTED QUADRATIC BEHAVIOR. Abandoning scenario.`);
                     this.abandonedScenarios.add(scenarioKey);
                 }
             }
         }
     }
-    
-    // (The saveResults, logHeader, and logFooter methods are unchanged)
+
+    /**
+     * Saves all collected performance results to a JSON file.
+     */
     private saveResults(): void {
         const reportsDir = path.join(__dirname, '../../reports');
         if (!fs.existsSync(reportsDir)) { fs.mkdirSync(reportsDir, { recursive: true }); }
         const outputPath = path.join(reportsDir, 'performance-results.json');
         try {
             fs.writeFileSync(outputPath, JSON.stringify(this.results, null, 2));
-            console.log(`\n✅ Results successfully saved to: ${path.relative(process.cwd(), outputPath)}`);
+            console.log(`\nResults successfully saved to: ${path.relative(process.cwd(), outputPath)}`);
         } catch (error) {
-            console.error(`\n❌ Failed to save results to file: ${outputPath}`, error);
+            console.error(`\nFailed to save results to file: ${outputPath}`, error);
         }
     }
-    private logHeader(): void { console.log('================================================\n🚀 STARTING PERFORMANCE BENCHMARK SUITE 🚀\n================================================'); }
+
+    /** Logs a simple header message when the benchmark starts. */
+    private logHeader(): void { console.log('================================================\nSTARTING PERFORMANCE BENCHMARK SUITE\n================================================'); }
+
+    /** Logs a summary message when the benchmark completes. */
     private logFooter(): void {
         const totalDuration = (performance.now() - this.totalStartTime) / 1000;
-        console.log('\n================================================\n🏁 BENCHMARK SUITE COMPLETE 🏁');
+        console.log('\n================================================\nBENCHMARK SUITE COMPLETE');
         console.log(`Total execution time: ${totalDuration.toFixed(2)} seconds.`);
     }
 }
 
-
+// Create and run the benchmark.
 const runner = new BenchmarkRunner();
-runner.run().catch(error => {
-    console.error("A critical error occurred during the benchmark execution:", error);
-});
+runner.run();

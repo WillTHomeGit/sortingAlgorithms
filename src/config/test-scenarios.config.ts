@@ -94,9 +94,4 @@ export const scenariosToTest: TestScenario[] = [
         dataType: 'integer',
     },
     
-    // To disable a test scenario at any time, simply comment it out.
-    // {
-    //   name: 'on a nearly sorted (5% chaos) float array',
-    //   generator: (size) => generateNearlySortedArray(size, 5, false, 'float'),
-    // },
 ];

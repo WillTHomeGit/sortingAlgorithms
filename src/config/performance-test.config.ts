@@ -15,6 +15,7 @@ export const performanceTestConfig = {
      * A fixed list of array sizes to benchmark against for specific data points.
      */
     staticTestSizes: [
+        100_000
     ],
 
     /**

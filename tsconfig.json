@@ -1,13 +1,28 @@
 {
   "compilerOptions": {
-    "target": "es2022",
+    /* Language and Environment */
+    "target": "es2020",
+    "lib": ["es2020"],
+
+    /* Modules */
     "module": "commonjs",
     "rootDir": "./src",
     "outDir": "./dist",
+    
+    /* Type Checking */
+    "strict": true,
+    "noImplicitAny": true,
+
+    /* JavaScript Support */
+    "allowJs": false,
+
+    /* Interop Constraints */
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
+
+    /* Completeness */
     "skipLibCheck": true
   },
-  "include": ["src/**/*"] // <--- ADD THIS LINE
+  "include": ["src/**/*"], // Only compile files inside the src directory
+  "exclude": ["node_modules", "**/*.test.ts"] // Don't compile test files
 }
