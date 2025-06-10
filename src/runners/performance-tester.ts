@@ -15,8 +15,8 @@ import { BenchmarkRunner } from '../benchmarking/benchmark-runner';
 async function main() {
     // 1. Instantiate services
     const logger = new LoggerService();
-    const resultManager = new ResultManager(logger);
     const testDataGenerator = new TestDataGenerator(logger);
+    const resultManager = new ResultManager(logger);
 
     // 2. Inject dependencies into the main runner
     const runner = new BenchmarkRunner(
