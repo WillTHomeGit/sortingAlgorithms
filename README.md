@@ -12,7 +12,7 @@ the test !!! WILL TAKE A REALLY LONG TIME !!! >= 4 minutes on a slow computer. (
 To speed up the program, 
     Navigate to   src/benchmarking/services/benchmark.config.ts
     Find and change  MAX_EXECUTION_TIME_MS  to anything less than it's current value.
-    Values of < 10 will result in much large magnitudes of variability in the benchmarks.
+    Values of < 10 will result in much larger magnitudes of variability in the benchmarks.
     RECOMMENDED MAX_EXECUTION_TIME_MS VALUE = ~30
     
 
